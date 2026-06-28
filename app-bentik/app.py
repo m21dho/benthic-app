@@ -22,7 +22,7 @@ from hf_hub_utils import (
     hf_ensure_repos, hf_download_model, hf_upload_model,
     hf_upload_images, hf_get_image_counts, hf_download_dataset,
 )
-from model_utils import load_model_cached, classify_image
+from model_utils import load_model_cached, classify_image, compute_gradcam_overlay
 from train_utils import prepare_dataset_from_dir, finetune_model
 from styles import CSS, render_hero, render_prediction_card, render_class_status_cards, render_footer
 
@@ -37,7 +37,6 @@ st.set_page_config(
     page_title="Klasifikasi Habitat Bentik",
     page_icon="🌊",
     layout="centered",
-    initial_sidebar_state="expanded",
 )
 st.markdown(CSS, unsafe_allow_html=True)
 
@@ -50,44 +49,17 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-
-# ============================================================
-# SIDEBAR
-# ============================================================
-st.sidebar.header("⚙️ Konfigurasi")
-
 hf_cfg = get_hf_config()
 hf_available = hf_cfg is not None
 
-st.sidebar.subheader("☁️ Hugging Face Hub")
-if hf_available:
-    st.sidebar.success("✅ HF Hub terkonfigurasi")
-else:
-    st.sidebar.warning(
-        "⚠️ HF Hub belum dikonfigurasi.\n\n"
-        "Tambahkan di **Settings → Secrets**:\n"
-        "```\n"
-        'HF_TOKEN = "hf_xxxxx"\n'
-        'HF_MODEL_REPO = "user/bentik-model"\n'
-        'HF_DATASET_REPO = "user/bentik-dataset"\n'
-        "```"
+with st.expander("ℹ️ Cara pakai"):
+    st.markdown(
+        "**Tab Klasifikasi** — upload gambar, lihat prediksi & area fokus model (Grad-CAM).\n\n"
+        "**Tab Kelola Dataset** — upload citra training per kelas "
+        f"(min. {MIN_IMAGES_PER_CLASS}/kelas), lalu latih ulang model.\n\n"
+        f"Model menerima gambar {IMG_SIZE}×{IMG_SIZE}px, dengan confidence threshold "
+        f"{CONFIDENCE_THRESHOLD*100:.0f}%."
     )
-
-st.sidebar.subheader("📋 Kelas Model")
-class_list = "\n".join([f"{CLASS_ICONS.get(c,'•')} {c}" for c in CLASS_NAMES])
-st.sidebar.info(
-    f"**Jumlah Kelas:** {NUM_CLASSES}\n\n{class_list}\n\n"
-    f"**Ukuran Input:** {IMG_SIZE}×{IMG_SIZE}px\n"
-    f"**Confidence Threshold:** {CONFIDENCE_THRESHOLD*100:.0f}%"
-)
-
-st.sidebar.markdown("---")
-st.sidebar.info(
-    "📝 **Petunjuk:**\n\n"
-    "**Tab Klasifikasi** — upload gambar, lihat prediksi.\n\n"
-    "**Tab Kelola Dataset** — upload citra training per kelas "
-    f"(min. {MIN_IMAGES_PER_CLASS}/kelas), lalu latih ulang model."
-)
 
 
 # ============================================================
@@ -127,13 +99,11 @@ if not st.session_state.model_loaded:
 
     st.session_state.model_debug = "\n".join(debug_lines)
 
-st.sidebar.subheader("📊 Status Model")
-if st.session_state.model_loaded:
-    st.sidebar.success(f"✅ Model aktif\n📁 {MODEL_FILENAME}")
-else:
-    st.sidebar.error("❌ Model belum dimuat")
-    with st.sidebar.expander("🔍 Detail error (untuk debugging)"):
+if not st.session_state.model_loaded:
+    st.error("❌ Model belum berhasil dimuat.")
+    with st.expander("🔍 Detail error (untuk debugging)"):
         st.code(st.session_state.model_debug or "(tidak ada info)")
+
 
 
 # ============================================================
@@ -169,59 +139,105 @@ with tab_klasifikasi:
                 f"**Ukuran file:** {uploaded_image.size / 1024:.2f} KB"
             )
 
+        # Reset hasil lama kalau gambar yang di-upload berganti
+        fingerprint = (uploaded_image.name, uploaded_image.size)
+        if st.session_state.get("classify_fingerprint") != fingerprint:
+            st.session_state.pop("classify_result", None)
+            st.session_state["classify_fingerprint"] = fingerprint
+            st.session_state["classify_image"] = pil_image
+
         if st.button("🚀 Jalankan klasifikasi", width="stretch", type="primary"):
             try:
                 with st.spinner("⏳ Memproses gambar..."):
                     result = classify_image(st.session_state.loaded_model, pil_image)
-
-                pred_class = result["pred_class"]
-                confidence = result["confidence"]
-                probs = result["probs"]
-                below_threshold = confidence < CONFIDENCE_THRESHOLD
-
-                st.markdown(
-                    render_prediction_card(pred_class, confidence, below_threshold),
-                    unsafe_allow_html=True,
-                )
-
-                st.markdown("**📋 Persentase semua kelas**")
-
-                sorted_items = sorted(probs.items(), key=lambda x: x[1], reverse=True)
-                chart_df = pd.DataFrame(sorted_items, columns=["Kelas", "Confidence"])
-
-                color_scale = alt.Scale(
-                    domain=[k for k, _ in sorted_items],
-                    range=[CLASS_COLORS.get(k, {"accent": "#888"})["accent"] for k, _ in sorted_items],
-                )
-                chart = (
-                    alt.Chart(chart_df)
-                    .mark_bar(cornerRadiusTopRight=6, cornerRadiusBottomRight=6, size=22)
-                    .encode(
-                        x=alt.X("Confidence:Q", title="Confidence (%)", scale=alt.Scale(domain=[0, 100])),
-                        y=alt.Y("Kelas:N", sort="-x", title=None),
-                        color=alt.Color("Kelas:N", scale=color_scale, legend=None),
-                        tooltip=["Kelas", alt.Tooltip("Confidence:Q", format=".2f")],
-                    )
-                    .properties(height=180)
-                )
-                st.altair_chart(chart, width="stretch")
-
-                df = pd.DataFrame(
-                    [(k, f"{v:.2f}%") for k, v in sorted_items],
-                    columns=["Kelas", "Confidence (%)"],
-                )
-                st.dataframe(df, width="stretch", hide_index=True)
-
+                st.session_state["classify_result"] = result
+                st.session_state["classify_image"] = pil_image
             except Exception as e:
                 st.error(f"❌ Error: {e}")
 
+        if "classify_result" in st.session_state:
+            result = st.session_state["classify_result"]
+            pred_class = result["pred_class"]
+            confidence = result["confidence"]
+            probs = result["probs"]
+            below_threshold = confidence < CONFIDENCE_THRESHOLD
+
+            st.markdown(
+                render_prediction_card(pred_class, confidence, below_threshold),
+                unsafe_allow_html=True,
+            )
+
+            st.markdown("**📋 Persentase semua kelas**")
+
+            sorted_items = sorted(probs.items(), key=lambda x: x[1], reverse=True)
+            chart_df = pd.DataFrame(sorted_items, columns=["Kelas", "Confidence"])
+
+            color_scale = alt.Scale(
+                domain=[k for k, _ in sorted_items],
+                range=[CLASS_COLORS.get(k, {"accent": "#888"})["accent"] for k, _ in sorted_items],
+            )
+            chart = (
+                alt.Chart(chart_df)
+                .mark_bar(cornerRadiusTopRight=6, cornerRadiusBottomRight=6, size=22)
+                .encode(
+                    x=alt.X("Confidence:Q", title="Confidence (%)", scale=alt.Scale(domain=[0, 100])),
+                    y=alt.Y("Kelas:N", sort="-x", title=None),
+                    color=alt.Color("Kelas:N", scale=color_scale, legend=None),
+                    tooltip=["Kelas", alt.Tooltip("Confidence:Q", format=".2f")],
+                )
+                .properties(height=180)
+            )
+            st.altair_chart(chart, width="stretch")
+
+            df = pd.DataFrame(
+                [(k, f"{v:.2f}%") for k, v in sorted_items],
+                columns=["Kelas", "Confidence (%)"],
+            )
+            st.dataframe(df, width="stretch", hide_index=True)
+
+            # ── Grad-CAM ──
+            st.markdown("---")
+            st.markdown("**🔥 Grad-CAM — area fokus model**")
+            st.caption(
+                "Warna merah/kuning menandai bagian gambar yang paling memengaruhi "
+                "prediksi model. Biru/hijau berarti area itu kurang berpengaruh."
+            )
+
+            gradcam_class = st.selectbox(
+                "Lihat fokus model untuk kelas:",
+                CLASS_NAMES,
+                index=CLASS_NAMES.index(pred_class),
+                key="gradcam_class_select",
+            )
+            target_idx = CLASS_NAMES.index(gradcam_class)
+            cam_image = st.session_state.get("classify_image", pil_image)
+
+            with st.spinner("🔥 Menghitung Grad-CAM..."):
+                overlay_img = compute_gradcam_overlay(
+                    st.session_state.loaded_model, cam_image, pred_index=target_idx
+                )
+
+            if overlay_img is not None:
+                gc1, gc2 = st.columns(2)
+                with gc1:
+                    st.markdown("Gambar asli")
+                    st.image(cam_image.convert("RGB").resize((IMG_SIZE, IMG_SIZE)), width="stretch")
+                with gc2:
+                    st.markdown(f"Fokus model: {gradcam_class}")
+                    st.image(overlay_img, width="stretch")
+            else:
+                st.info(
+                    "Grad-CAM tidak tersedia untuk arsitektur model ini "
+                    "(tidak ditemukan layer feature-map yang cocok)."
+                )
+
     elif uploaded_image is not None and not st.session_state.model_loaded:
-        st.warning("⚠️ Model belum dimuat. Periksa konfigurasi model / HF Hub di sidebar.")
+        st.warning("⚠️ Model belum dimuat. Lihat detail error di atas.")
     else:
         if st.session_state.model_loaded:
             st.info("📤 Silakan upload gambar untuk diklasifikasi.")
         else:
-            st.error("❌ Model belum aktif. Lihat detail error di sidebar.")
+            st.error("❌ Model belum aktif. Lihat detail error di atas.")
 
 
 # ────────────────────────────────────────────────────────────
