@@ -127,6 +127,16 @@ section[data-testid="stSidebar"] { background: #F4F8F7; }
 """
 
 
+def _clean_html(html: str) -> str:
+    """
+    Hilangkan spasi di awal setiap baris.
+    Penting: Markdown menganggap baris berawalan 4+ spasi sebagai code block
+    (ditampilkan sebagai teks mentah, bukan dirender sebagai HTML). Semua
+    fungsi render_* di bawah harus membungkus hasilnya dengan ini.
+    """
+    return "\n".join(line.strip() for line in html.strip().splitlines())
+
+
 def render_hero(title: str, subtitle: str) -> str:
     """Hero banner dengan judul, subjudul, dan badge semua kelas."""
     badges = ""
@@ -134,13 +144,13 @@ def render_hero(title: str, subtitle: str) -> str:
         icon = CLASS_ICONS.get(cn, "•")
         badges += f'<span class="bentik-badge">{icon} {cn}</span>'
 
-    return f"""
+    return _clean_html(f"""
     <div class="bentik-hero">
         <p class="bentik-hero-title">{title}</p>
         <p class="bentik-hero-sub">{subtitle}</p>
         <div class="bentik-badge-row">{badges}</div>
     </div>
-    """
+    """)
 
 
 def render_prediction_card(pred_class: str) -> str:
@@ -148,7 +158,7 @@ def render_prediction_card(pred_class: str) -> str:
     colors = CLASS_COLORS.get(pred_class, {"bg": "#F0F0F0", "accent": "#888", "text": "#333"})
     icon = CLASS_ICONS.get(pred_class, "•")
 
-    return f"""
+    return _clean_html(f"""
     <div class="bentik-result" style="background:{colors['bg']};">
         <div class="bentik-result-icon">{icon}</div>
         <div style="flex:1;">
@@ -156,12 +166,12 @@ def render_prediction_card(pred_class: str) -> str:
             <p class="bentik-result-class" style="color:{colors['text']};">{pred_class}</p>
         </div>
     </div>
-    """
+    """)
 
 
 def render_not_detected_card() -> str:
     """Kartu netral untuk kasus confidence di bawah threshold."""
-    return """
+    return _clean_html("""
     <div class="bentik-result" style="background:#EFEFEC;">
         <div class="bentik-result-icon">❓</div>
         <div style="flex:1;">
@@ -172,7 +182,7 @@ def render_not_detected_card() -> str:
             </div>
         </div>
     </div>
-    """
+    """)
 
 
 
@@ -201,7 +211,7 @@ def render_class_status_cards(counts: dict, minimum: int) -> str:
             <div class="bentik-status-label" style="color:{status_color};">{status_text}</div>
         </div>
         """
-    return f'<div class="bentik-status-grid">{cards}</div>'
+    return _clean_html(f'<div class="bentik-status-grid">{cards}</div>')
 
 
 def render_footer(text: str) -> str:
