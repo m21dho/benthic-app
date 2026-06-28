@@ -35,7 +35,7 @@ CLASS_COLORS = {
 
 IMG_SIZE = 224
 CONFIDENCE_THRESHOLD = 0.7
-MIN_IMAGES_PER_CLASS = 50  # Batas minimum citra per kelas untuk retrain
+MIN_IMAGES_PER_CLASS = 25  # Batas minimum citra per kelas untuk retrain
 
 # ============================================================
 # PATH MODEL
