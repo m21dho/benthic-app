@@ -39,41 +39,58 @@ def hf_download_model(hf_cfg, local_dir="models"):
 
 
 def hf_upload_model(hf_cfg, local_path):
-    """Upload model .keras ke HF Hub (+ simpan backup bertimestamp)."""
-    from huggingface_hub import HfApi
+    """Upload model .keras ke HF Hub (+ simpan backup bertimestamp) DALAM SATU COMMIT."""
+    from huggingface_hub import HfApi, CommitOperationAdd
     api = HfApi(token=hf_cfg["token"])
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    api.upload_file(
-        path_or_fileobj=local_path,
-        path_in_repo=f"backups/{ts}_{MODEL_FILENAME}",
+    operations = [
+        CommitOperationAdd(path_in_repo=MODEL_FILENAME, path_or_fileobj=local_path),
+        CommitOperationAdd(path_in_repo=f"backups/{ts}_{MODEL_FILENAME}", path_or_fileobj=local_path),
+    ]
+    api.create_commit(
         repo_id=hf_cfg["model_repo"],
         repo_type="model",
-    )
-    api.upload_file(
-        path_or_fileobj=local_path,
-        path_in_repo=MODEL_FILENAME,
-        repo_id=hf_cfg["model_repo"],
-        repo_type="model",
+        operations=operations,
+        commit_message=f"Update model + backup {ts}",
     )
 
 
-def hf_upload_images(hf_cfg, class_name, image_bytes_list):
-    """Upload list of (filename, bytes) ke HF dataset repo di folder class_name/."""
-    from huggingface_hub import HfApi
+def hf_upload_images(hf_cfg, class_name, image_bytes_list, batch_size=75):
+    """
+    Upload list of (filename, bytes) ke HF dataset repo di folder class_name/.
+
+    PENTING: digabung jadi commit BATCH (maks `batch_size` file per commit),
+    bukan 1 commit per file — Hugging Face membatasi 128 commit/jam untuk
+    akun gratis, jadi upload satu-per-satu akan cepat kena rate limit.
+    Dengan batching, 1000 citra cukup ~14 commit, bukan 1000 commit.
+    """
+    from huggingface_hub import HfApi, CommitOperationAdd
     api = HfApi(token=hf_cfg["token"])
     class_folder = class_name.lower()
+    items = list(image_bytes_list)
     uploaded = 0
-    for fname, fbytes in image_bytes_list:
-        try:
-            api.upload_file(
-                path_or_fileobj=fbytes,
+
+    for i in range(0, len(items), batch_size):
+        chunk = items[i:i + batch_size]
+        operations = [
+            CommitOperationAdd(
                 path_in_repo=f"{class_folder}/{fname}",
+                path_or_fileobj=fbytes,
+            )
+            for fname, fbytes in chunk
+        ]
+        try:
+            api.create_commit(
                 repo_id=hf_cfg["dataset_repo"],
                 repo_type="dataset",
+                operations=operations,
+                commit_message=f"Tambah {len(operations)} citra ke kelas {class_name}",
             )
-            uploaded += 1
+            uploaded += len(operations)
         except Exception:
-            pass
+            # Lewati batch yang gagal, lanjut ke batch berikutnya
+            continue
+
     return uploaded
 
 
