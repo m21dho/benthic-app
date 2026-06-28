@@ -19,6 +19,7 @@ from config import (
 from hf_hub_utils import (
     hf_ensure_repos, hf_download_model, hf_upload_model,
     hf_upload_images, hf_get_image_counts, hf_download_dataset,
+    detect_class_from_path,
 )
 from model_utils import load_model_cached, classify_image, compute_gradcam_overlay
 from train_utils import prepare_dataset_from_dir, finetune_model
@@ -270,58 +271,139 @@ with tab_dataset:
         # ── Upload citra ──
         st.markdown("**📤 Upload citra baru ke dataset**")
 
-        selected_class = st.selectbox(
-            "Pilih kelas tujuan:",
-            CLASS_NAMES,
-            help="Citra yang di-upload akan masuk ke kelas ini.",
+        if "uploader_gen" not in st.session_state:
+            st.session_state["uploader_gen"] = 0  # dipakai utk "mengosongkan" widget upload
+
+        upload_mode = st.radio(
+            "Cara upload:",
+            ["📁 Upload folder (otomatis per subfolder)", "🖼️ Upload manual per kelas"],
+            horizontal=True,
+            label_visibility="collapsed",
         )
 
-        uploaded_files = st.file_uploader(
-            f"Upload citra untuk kelas {selected_class}",
-            type=["jpg", "jpeg", "png", "bmp", "tiff"],
-            accept_multiple_files=True,
-            help=f"Upload minimal {MIN_IMAGES_PER_CLASS} citra per kelas. "
-                 "Anda bisa upload berkali-kali — citra akan terakumulasi di HF Hub.",
-            key="dataset_uploader",
-        )
+        # ============================================================
+        # MODE A — Upload folder, kelas otomatis terdeteksi dari subfolder
+        # ============================================================
+        if upload_mode.startswith("📁"):
+            st.caption(
+                "Pilih 1 folder yang berisi subfolder bernama sesuai kelas — "
+                f"contoh: `dataset/alga/`, `dataset/karang/`, dst. "
+                f"Nama subfolder harus salah satu dari: {', '.join(CLASS_NAMES)} "
+                "(huruf besar/kecil tidak masalah)."
+            )
 
-        if uploaded_files:
-            st.caption(f"📎 {len(uploaded_files)} file dipilih untuk kelas **{selected_class}**")
+            folder_files = st.file_uploader(
+                "Upload folder dataset",
+                type=["jpg", "jpeg", "png", "bmp", "tiff"],
+                accept_multiple_files="directory",
+                key=f"folder_uploader_{st.session_state['uploader_gen']}",
+            )
 
-            preview_count = min(8, len(uploaded_files))
-            cols = st.columns(min(4, preview_count))
-            for i in range(preview_count):
-                with cols[i % len(cols)]:
-                    img = Image.open(uploaded_files[i])
-                    st.image(img, caption=uploaded_files[i].name, width="stretch")
+            if folder_files:
+                grouped, unrecognized = {}, []
+                for f in folder_files:
+                    detected = detect_class_from_path(f.name, CLASS_NAMES)
+                    if detected:
+                        grouped.setdefault(detected, []).append(f)
+                    else:
+                        unrecognized.append(f.name)
 
-            if len(uploaded_files) > preview_count:
-                st.caption(f"... dan {len(uploaded_files) - preview_count} citra lainnya")
+                st.caption(f"📎 {len(folder_files)} file terbaca dari folder")
+                if grouped:
+                    summary = " · ".join(f"**{cn}**: {len(fs)}" for cn, fs in grouped.items())
+                    st.info(f"Terdeteksi otomatis → {summary}")
+                if unrecognized:
+                    with st.expander(f"⚠️ {len(unrecognized)} file tidak terdeteksi kelasnya"):
+                        st.caption(
+                            "Nama folder file-file ini tidak cocok dengan kelas manapun, "
+                            "jadi tidak akan diupload. Pastikan ada di dalam subfolder "
+                            f"bernama: {', '.join(CLASS_NAMES)}."
+                        )
+                        st.write(unrecognized[:30])
 
-            if st.button("⬆️ Upload ke Hugging Face Hub", width="stretch", type="primary"):
-                image_data, skipped = [], 0
-                for f in uploaded_files:
-                    try:
-                        img = Image.open(f)
-                        img.verify()
-                        f.seek(0)
-                        image_data.append((f.name, f.read()))
-                        f.seek(0)
-                    except Exception:
-                        skipped += 1
+                if grouped and st.button(
+                    "⬆️ Upload semua ke Hugging Face Hub", width="stretch", type="primary"
+                ):
+                    total_uploaded, total_skipped = 0, 0
+                    with st.spinner(f"⬆️ Mengupload {sum(len(v) for v in grouped.values())} citra..."):
+                        for cn, files in grouped.items():
+                            image_data = []
+                            for f in files:
+                                try:
+                                    img = Image.open(f)
+                                    img.verify()
+                                    f.seek(0)
+                                    fname = f.name.replace("\\", "/").rsplit("/", 1)[-1]
+                                    image_data.append((fname, f.read()))
+                                except Exception:
+                                    total_skipped += 1
+                            total_uploaded += hf_upload_images(hf_cfg, cn, image_data)
 
-                if image_data:
-                    with st.spinner(f"⬆️ Mengupload {len(image_data)} citra ke HF Hub..."):
-                        uploaded_count = hf_upload_images(hf_cfg, selected_class, image_data)
+                    st.toast(f"✅ Berhasil upload {total_uploaded} citra!", icon="✅")
+                    if total_skipped > 0:
+                        st.toast(f"⚠️ {total_skipped} file dilewati (bukan gambar valid)", icon="⚠️")
 
-                    st.success(f"✅ Berhasil upload {uploaded_count} citra ke kelas **{selected_class}**")
-                    if skipped > 0:
-                        st.warning(f"⚠️ {skipped} file dilewati (bukan gambar valid)")
-
+                    st.session_state["uploader_gen"] += 1  # reset widget -> gambar hilang dari tampilan
                     st.cache_data.clear()
                     st.rerun()
-                else:
-                    st.error("❌ Tidak ada file gambar valid yang bisa di-upload.")
+
+        # ============================================================
+        # MODE B — Upload manual, pilih 1 kelas lalu pilih file
+        # ============================================================
+        else:
+            selected_class = st.selectbox(
+                "Pilih kelas tujuan:",
+                CLASS_NAMES,
+                help="Citra yang di-upload akan masuk ke kelas ini.",
+            )
+
+            uploaded_files = st.file_uploader(
+                f"Upload citra untuk kelas {selected_class}",
+                type=["jpg", "jpeg", "png", "bmp", "tiff"],
+                accept_multiple_files=True,
+                help=f"Upload minimal {MIN_IMAGES_PER_CLASS} citra per kelas. "
+                     "Anda bisa upload berkali-kali — citra akan terakumulasi di HF Hub.",
+                key=f"dataset_uploader_{st.session_state['uploader_gen']}",
+            )
+
+            if uploaded_files:
+                st.caption(f"📎 {len(uploaded_files)} file dipilih untuk kelas **{selected_class}**")
+
+                preview_count = min(8, len(uploaded_files))
+                cols = st.columns(min(4, preview_count))
+                for i in range(preview_count):
+                    with cols[i % len(cols)]:
+                        img = Image.open(uploaded_files[i])
+                        st.image(img, caption=uploaded_files[i].name, width="stretch")
+
+                if len(uploaded_files) > preview_count:
+                    st.caption(f"... dan {len(uploaded_files) - preview_count} citra lainnya")
+
+                if st.button("⬆️ Upload ke Hugging Face Hub", width="stretch", type="primary"):
+                    image_data, skipped = [], 0
+                    for f in uploaded_files:
+                        try:
+                            img = Image.open(f)
+                            img.verify()
+                            f.seek(0)
+                            image_data.append((f.name, f.read()))
+                            f.seek(0)
+                        except Exception:
+                            skipped += 1
+
+                    if image_data:
+                        with st.spinner(f"⬆️ Mengupload {len(image_data)} citra ke HF Hub..."):
+                            uploaded_count = hf_upload_images(hf_cfg, selected_class, image_data)
+
+                        st.toast(f"✅ Berhasil upload {uploaded_count} citra ke kelas {selected_class}!", icon="✅")
+                        if skipped > 0:
+                            st.toast(f"⚠️ {skipped} file dilewati (bukan gambar valid)", icon="⚠️")
+
+                        st.session_state["uploader_gen"] += 1  # reset widget -> gambar hilang dari tampilan
+                        st.cache_data.clear()
+                        st.rerun()
+                    else:
+                        st.error("❌ Tidak ada file gambar valid yang bisa di-upload.")
 
         st.markdown("---")
 
