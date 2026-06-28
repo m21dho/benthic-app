@@ -10,12 +10,10 @@ import warnings
 
 import streamlit as st
 import pandas as pd
-import altair as alt
 from PIL import Image
 
 from config import (
-    NUM_CLASSES, CLASS_NAMES, CLASS_COLORS, CLASS_ICONS,
-    IMG_SIZE, CONFIDENCE_THRESHOLD, MIN_IMAGES_PER_CLASS,
+    CLASS_NAMES, IMG_SIZE, CONFIDENCE_THRESHOLD, MIN_IMAGES_PER_CLASS,
     MODEL_FOLDER, MODEL_FILENAME, get_hf_config,
 )
 from hf_hub_utils import (
@@ -24,7 +22,7 @@ from hf_hub_utils import (
 )
 from model_utils import load_model_cached, classify_image, compute_gradcam_overlay
 from train_utils import prepare_dataset_from_dir, finetune_model
-from styles import CSS, render_hero, render_prediction_card, render_class_status_cards, render_footer
+from styles import CSS, render_hero, render_prediction_card, render_not_detected_card, render_class_status_cards, render_footer
 
 warnings.filterwarnings("ignore")
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
@@ -159,41 +157,12 @@ with tab_klasifikasi:
             result = st.session_state["classify_result"]
             pred_class = result["pred_class"]
             confidence = result["confidence"]
-            probs = result["probs"]
             below_threshold = confidence < CONFIDENCE_THRESHOLD
 
-            st.markdown(
-                render_prediction_card(pred_class, confidence, below_threshold),
-                unsafe_allow_html=True,
-            )
-
-            st.markdown("**📋 Persentase semua kelas**")
-
-            sorted_items = sorted(probs.items(), key=lambda x: x[1], reverse=True)
-            chart_df = pd.DataFrame(sorted_items, columns=["Kelas", "Confidence"])
-
-            color_scale = alt.Scale(
-                domain=[k for k, _ in sorted_items],
-                range=[CLASS_COLORS.get(k, {"accent": "#888"})["accent"] for k, _ in sorted_items],
-            )
-            chart = (
-                alt.Chart(chart_df)
-                .mark_bar(cornerRadiusTopRight=6, cornerRadiusBottomRight=6, size=22)
-                .encode(
-                    x=alt.X("Confidence:Q", title="Confidence (%)", scale=alt.Scale(domain=[0, 100])),
-                    y=alt.Y("Kelas:N", sort="-x", title=None),
-                    color=alt.Color("Kelas:N", scale=color_scale, legend=None),
-                    tooltip=["Kelas", alt.Tooltip("Confidence:Q", format=".2f")],
-                )
-                .properties(height=180)
-            )
-            st.altair_chart(chart, width="stretch")
-
-            df = pd.DataFrame(
-                [(k, f"{v:.2f}%") for k, v in sorted_items],
-                columns=["Kelas", "Confidence (%)"],
-            )
-            st.dataframe(df, width="stretch", hide_index=True)
+            if below_threshold:
+                st.markdown(render_not_detected_card(), unsafe_allow_html=True)
+            else:
+                st.markdown(render_prediction_card(pred_class), unsafe_allow_html=True)
 
             # ── Grad-CAM ──
             st.markdown("---")
