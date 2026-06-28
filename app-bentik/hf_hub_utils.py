@@ -108,3 +108,18 @@ def hf_download_dataset(hf_cfg, local_dir):
         token=hf_cfg["token"],
         local_dir=local_dir,
     )
+
+
+def detect_class_from_path(rel_path, class_names):
+    """
+    Cari nama kelas dari path relatif sebuah file hasil upload folder
+    (mis. 'dataset_baru/karang/foto1.jpg' -> 'Karang').
+    Mencocokkan SETIAP segmen folder (case-insensitive) terhadap class_names.
+    Return nama kelas (sesuai class_names) atau None jika tidak ketemu.
+    """
+    parts = rel_path.replace("\\", "/").split("/")[:-1]  # buang nama file
+    for part in parts:
+        for cn in class_names:
+            if part.strip().lower() == cn.lower():
+                return cn
+    return None
