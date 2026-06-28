@@ -1,0 +1,7 @@
+streamlit>=1.30.0
+tensorflow-cpu>=2.15.0
+numpy
+Pillow
+opencv-python-headless
+huggingface_hub>=0.20.0
+pandas
