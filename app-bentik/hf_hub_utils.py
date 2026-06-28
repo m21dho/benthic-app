@@ -1,0 +1,110 @@
+"""
+hf_hub_utils.py — Semua fungsi yang berbicara ke Hugging Face Hub.
+Murni fungsi I/O, tidak ada st.* (kode UI) di sini.
+"""
+import os
+from datetime import datetime
+
+from config import CLASS_NAMES, MODEL_FILENAME
+
+IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif", ".webp"}
+
+
+def hf_ensure_repos(hf_cfg):
+    """Pastikan repo model & dataset sudah ada di HF Hub; buat jika belum."""
+    from huggingface_hub import HfApi
+    api = HfApi(token=hf_cfg["token"])
+    for repo_id, repo_type in [(hf_cfg["model_repo"], "model"),
+                                (hf_cfg["dataset_repo"], "dataset")]:
+        try:
+            api.repo_info(repo_id=repo_id, repo_type=repo_type)
+        except Exception:
+            api.create_repo(repo_id=repo_id, repo_type=repo_type, private=True)
+
+
+def hf_download_model(hf_cfg, local_dir="models"):
+    """Download model .keras dari HF Hub ke folder lokal. Return (path, error_msg)."""
+    from huggingface_hub import hf_hub_download
+    os.makedirs(local_dir, exist_ok=True)
+    try:
+        path = hf_hub_download(
+            repo_id=hf_cfg["model_repo"],
+            filename=MODEL_FILENAME,
+            token=hf_cfg["token"],
+            local_dir=local_dir,
+        )
+        return path, None
+    except Exception as e:
+        return None, str(e)
+
+
+def hf_upload_model(hf_cfg, local_path):
+    """Upload model .keras ke HF Hub (+ simpan backup bertimestamp)."""
+    from huggingface_hub import HfApi
+    api = HfApi(token=hf_cfg["token"])
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    api.upload_file(
+        path_or_fileobj=local_path,
+        path_in_repo=f"backups/{ts}_{MODEL_FILENAME}",
+        repo_id=hf_cfg["model_repo"],
+        repo_type="model",
+    )
+    api.upload_file(
+        path_or_fileobj=local_path,
+        path_in_repo=MODEL_FILENAME,
+        repo_id=hf_cfg["model_repo"],
+        repo_type="model",
+    )
+
+
+def hf_upload_images(hf_cfg, class_name, image_bytes_list):
+    """Upload list of (filename, bytes) ke HF dataset repo di folder class_name/."""
+    from huggingface_hub import HfApi
+    api = HfApi(token=hf_cfg["token"])
+    class_folder = class_name.lower()
+    uploaded = 0
+    for fname, fbytes in image_bytes_list:
+        try:
+            api.upload_file(
+                path_or_fileobj=fbytes,
+                path_in_repo=f"{class_folder}/{fname}",
+                repo_id=hf_cfg["dataset_repo"],
+                repo_type="dataset",
+            )
+            uploaded += 1
+        except Exception:
+            pass
+    return uploaded
+
+
+def hf_get_image_counts(hf_cfg):
+    """Hitung jumlah citra per kelas di HF dataset repo."""
+    from huggingface_hub import HfApi
+    api = HfApi(token=hf_cfg["token"])
+    counts = {name: 0 for name in CLASS_NAMES}
+    try:
+        files = api.list_repo_files(repo_id=hf_cfg["dataset_repo"], repo_type="dataset")
+        for f in files:
+            parts = f.split("/")
+            if len(parts) >= 2:
+                folder = parts[0]
+                ext = os.path.splitext(parts[-1])[1].lower()
+                if ext in IMAGE_EXTS:
+                    for cn in CLASS_NAMES:
+                        if folder.lower() == cn.lower():
+                            counts[cn] += 1
+                            break
+    except Exception:
+        pass
+    return counts
+
+
+def hf_download_dataset(hf_cfg, local_dir):
+    """Download seluruh dataset repo ke folder lokal."""
+    from huggingface_hub import snapshot_download
+    return snapshot_download(
+        repo_id=hf_cfg["dataset_repo"],
+        repo_type="dataset",
+        token=hf_cfg["token"],
+        local_dir=local_dir,
+    )
