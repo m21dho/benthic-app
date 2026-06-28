@@ -87,8 +87,6 @@ h3 { font-size: 1.08rem !important; }
 .bentik-result-icon { font-size: 2.1rem; line-height: 1; }
 .bentik-result-label { font-size: 0.78rem; color: var(--ink-soft); font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; margin: 0; }
 .bentik-result-class { font-family: 'Space Grotesk', sans-serif; font-size: 1.5rem; font-weight: 700; margin: 0.1rem 0 0.5rem 0; }
-.bentik-conf-track { width: 100%; height: 10px; border-radius: 999px; background: rgba(11,30,45,0.08); overflow: hidden; }
-.bentik-conf-fill { height: 100%; border-radius: 999px; }
 .bentik-conf-text { font-size: 0.8rem; color: var(--ink-soft); margin-top: 0.3rem; font-weight: 500; }
 
 /* ---------- Dataset status cards ---------- */
@@ -145,33 +143,37 @@ def render_hero(title: str, subtitle: str) -> str:
     """
 
 
-def render_prediction_card(pred_class: str, confidence: float, below_threshold: bool) -> str:
-    """Kartu hasil prediksi: nama kelas + bar confidence berwarna sesuai kelas."""
+def render_prediction_card(pred_class: str) -> str:
+    """Kartu hasil prediksi: ikon + nama kelas, tanpa skor confidence."""
     colors = CLASS_COLORS.get(pred_class, {"bg": "#F0F0F0", "accent": "#888", "text": "#333"})
     icon = CLASS_ICONS.get(pred_class, "•")
-    pct = max(0.0, min(1.0, confidence)) * 100
-
-    warn_html = ""
-    if below_threshold:
-        warn_html = (
-            '<div class="bentik-conf-text" style="color:#A3431F;">'
-            '⚠️ Confidence di bawah threshold — hasil mungkin kurang akurat.</div>'
-        )
 
     return f"""
     <div class="bentik-result" style="background:{colors['bg']};">
         <div class="bentik-result-icon">{icon}</div>
         <div style="flex:1;">
-            <p class="bentik-result-label">Prediksi habitat</p>
+            <p class="bentik-result-label">Hasil klasifikasi</p>
             <p class="bentik-result-class" style="color:{colors['text']};">{pred_class}</p>
-            <div class="bentik-conf-track">
-                <div class="bentik-conf-fill" style="width:{pct:.1f}%; background:{colors['accent']};"></div>
-            </div>
-            <div class="bentik-conf-text">Confidence: {pct:.2f}%</div>
-            {warn_html}
         </div>
     </div>
     """
+
+
+def render_not_detected_card() -> str:
+    """Kartu netral untuk kasus confidence di bawah threshold."""
+    return """
+    <div class="bentik-result" style="background:#EFEFEC;">
+        <div class="bentik-result-icon">❓</div>
+        <div style="flex:1;">
+            <p class="bentik-result-label">Hasil klasifikasi</p>
+            <p class="bentik-result-class" style="color:#3F3F3B;">Tidak terdeteksi</p>
+            <div class="bentik-conf-text" style="color:#6B6B66;">
+                Model tidak cukup yakin gambar ini termasuk salah satu kelas yang dikenali.
+            </div>
+        </div>
+    </div>
+    """
+
 
 
 def render_class_status_cards(counts: dict, minimum: int) -> str:
