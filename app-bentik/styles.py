@@ -87,21 +87,9 @@ h3 { font-size: 1.08rem !important; }
 .bentik-result-icon { font-size: 2.1rem; line-height: 1; }
 .bentik-result-label { font-size: 0.78rem; color: var(--ink-soft); font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; margin: 0; }
 .bentik-result-class { font-family: 'Space Grotesk', sans-serif; font-size: 1.5rem; font-weight: 700; margin: 0.1rem 0 0.5rem 0; }
+.bentik-conf-track { width: 100%; height: 10px; border-radius: 999px; background: rgba(11,30,45,0.08); overflow: hidden; }
+.bentik-conf-fill { height: 100%; border-radius: 999px; }
 .bentik-conf-text { font-size: 0.8rem; color: var(--ink-soft); margin-top: 0.3rem; font-weight: 500; }
-
-/* ---------- Dataset status cards ---------- */
-.bentik-status-grid { display: flex; gap: 0.75rem; flex-wrap: wrap; margin: 0.6rem 0 1rem 0; }
-.bentik-status-card {
-    flex: 1 1 150px; min-width: 140px;
-    border-radius: 14px; padding: 0.95rem 1.05rem;
-    border: 1px solid var(--border-soft);
-}
-.bentik-status-top { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.25rem; }
-.bentik-status-name { font-weight: 600; font-size: 0.88rem; color: var(--ink); }
-.bentik-status-count { font-family: 'Space Grotesk', sans-serif; font-size: 1.55rem; font-weight: 700; margin: 0.1rem 0 0.45rem 0; color: var(--ink); }
-.bentik-status-track { width: 100%; height: 7px; border-radius: 999px; background: rgba(11,30,45,0.08); overflow: hidden; margin-bottom: 0.4rem; }
-.bentik-status-fill { height: 100%; border-radius: 999px; }
-.bentik-status-label { font-size: 0.74rem; font-weight: 600; }
 
 /* ---------- Footer ---------- */
 .bentik-footer {
@@ -110,9 +98,6 @@ h3 { font-size: 1.08rem !important; }
 }
 
 /* ---------- Native widget tweaks ---------- */
-.stTabs [data-baseweb="tab-list"] { gap: 1.6rem; }
-.stTabs [data-baseweb="tab"] { font-weight: 600; color: var(--ink-soft); }
-.stTabs [aria-selected="true"] { color: var(--ocean-teal) !important; }
 .stButton > button[kind="primary"] {
     background: var(--ocean-teal); border-color: var(--ocean-teal);
     border-radius: 10px; font-weight: 600;
@@ -122,7 +107,6 @@ h3 { font-size: 1.08rem !important; }
     background: #FFFFFF; border: 1px solid var(--border-soft);
     border-radius: 12px; padding: 0.7rem 0.9rem;
 }
-section[data-testid="stSidebar"] { background: #F4F8F7; }
 </style>
 """
 
@@ -153,10 +137,11 @@ def render_hero(title: str, subtitle: str) -> str:
     """)
 
 
-def render_prediction_card(pred_class: str) -> str:
-    """Kartu hasil prediksi: ikon + nama kelas, tanpa skor confidence."""
+def render_prediction_card(pred_class: str, confidence: float) -> str:
+    """Kartu hasil prediksi: ikon + nama kelas + bar confidence berwarna sesuai kelas."""
     colors = CLASS_COLORS.get(pred_class, {"bg": "#F0F0F0", "accent": "#888", "text": "#333"})
     icon = CLASS_ICONS.get(pred_class, "•")
+    pct = max(0.0, min(1.0, confidence)) * 100
 
     return _clean_html(f"""
     <div class="bentik-result" style="background:{colors['bg']};">
@@ -164,54 +149,35 @@ def render_prediction_card(pred_class: str) -> str:
         <div style="flex:1;">
             <p class="bentik-result-label">Hasil klasifikasi</p>
             <p class="bentik-result-class" style="color:{colors['text']};">{pred_class}</p>
+            <div class="bentik-conf-track">
+                <div class="bentik-conf-fill" style="width:{pct:.1f}%; background:{colors['accent']};"></div>
+            </div>
+            <div class="bentik-conf-text">Confidence: {pct:.2f}%</div>
         </div>
     </div>
     """)
 
 
-def render_not_detected_card() -> str:
+def render_not_detected_card(confidence: float) -> str:
     """Kartu netral untuk kasus confidence di bawah threshold."""
-    return _clean_html("""
+    pct = max(0.0, min(1.0, confidence)) * 100
+
+    return _clean_html(f"""
     <div class="bentik-result" style="background:#EFEFEC;">
         <div class="bentik-result-icon">❓</div>
         <div style="flex:1;">
             <p class="bentik-result-label">Hasil klasifikasi</p>
             <p class="bentik-result-class" style="color:#3F3F3B;">Tidak terdeteksi</p>
+            <div class="bentik-conf-track">
+                <div class="bentik-conf-fill" style="width:{pct:.1f}%; background:#A3431F;"></div>
+            </div>
             <div class="bentik-conf-text" style="color:#6B6B66;">
+                Confidence tertinggi cuma {pct:.2f}% — di bawah ambang batas.
                 Model tidak cukup yakin gambar ini termasuk salah satu kelas yang dikenali.
             </div>
         </div>
     </div>
     """)
-
-
-
-def render_class_status_cards(counts: dict, minimum: int) -> str:
-    """Grid kartu status jumlah citra per kelas vs minimum yang dibutuhkan."""
-    cards = ""
-    for cn in CLASS_NAMES:
-        n = counts.get(cn, 0)
-        colors = CLASS_COLORS.get(cn, {"bg": "#F0F0F0", "accent": "#888", "text": "#333"})
-        icon = CLASS_ICONS.get(cn, "•")
-        pct = max(0.0, min(1.0, n / minimum if minimum else 0)) * 100
-        ok = n >= minimum
-        status_text = "✅ Siap" if ok else f"Butuh {minimum - n} lagi"
-        status_color = colors["accent"] if ok else "#A3431F"
-
-        cards += f"""
-        <div class="bentik-status-card" style="background:{colors['bg']};">
-            <div class="bentik-status-top">
-                <span>{icon}</span>
-                <span class="bentik-status-name" style="color:{colors['text']};">{cn}</span>
-            </div>
-            <p class="bentik-status-count" style="color:{colors['text']};">{n}</p>
-            <div class="bentik-status-track">
-                <div class="bentik-status-fill" style="width:{pct:.1f}%; background:{colors['accent']};"></div>
-            </div>
-            <div class="bentik-status-label" style="color:{status_color};">{status_text}</div>
-        </div>
-        """
-    return _clean_html(f'<div class="bentik-status-grid">{cards}</div>')
 
 
 def render_footer(text: str) -> str:
