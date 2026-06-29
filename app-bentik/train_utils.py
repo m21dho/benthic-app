@@ -62,6 +62,30 @@ def prepare_dataset_from_dir(data_dir, validation_split=0.2):
     return train_ds, val_ds, total
 
 
+def evaluate_model(model, val_ds):
+    """
+    Evaluasi model pada val_ds (label berupa integer, bukan one-hot).
+
+    Model yang di-load dari file .keras bisa saja punya konfigurasi loss lama
+    dari training awal (mis. categorical_crossentropy + label one-hot, kalau
+    training aslinya pakai Label Smoothing). Itu tidak cocok dengan val_ds
+    kita yang labelnya integer biasa -> akan error rank mismatch saat evaluate.
+
+    Compile ulang dengan SparseCategoricalCrossentropy supaya cocok dengan
+    format label kita. Ini AMAN: compile cuma mengganti konfigurasi
+    loss/optimizer/metric, tidak mengubah bobot/weight model sama sekali.
+
+    Return (loss, accuracy).
+    """
+    model.compile(
+        optimizer=tf.keras.optimizers.Adam(),
+        loss=tf.keras.losses.SparseCategoricalCrossentropy(),
+        metrics=["accuracy"],
+    )
+    loss, acc = model.evaluate(val_ds, verbose=0)
+    return loss, acc
+
+
 def finetune_model(base_model, train_ds, val_ds, epochs=5, lr=1e-5):
     """
     Fine-tune: backbone dibekukan, hanya classification head yang dilatih.
