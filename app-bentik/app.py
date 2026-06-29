@@ -22,7 +22,7 @@ from hf_hub_utils import (
     detect_class_from_path,
 )
 from model_utils import load_model_cached, classify_image, compute_gradcam_overlay
-from train_utils import prepare_dataset_from_dir, finetune_model
+from train_utils import prepare_dataset_from_dir, finetune_model, evaluate_model
 from styles import CSS, render_hero, render_prediction_card, render_not_detected_card, render_class_status_cards, render_footer
 
 warnings.filterwarnings("ignore")
@@ -468,7 +468,7 @@ with tab_dataset:
 
                     st.write("📊 Mengevaluasi model lama pada data validasi...")
                     old_model = st.session_state.loaded_model
-                    old_loss, old_acc = old_model.evaluate(val_ds, verbose=0)
+                    old_loss, old_acc = evaluate_model(old_model, val_ds)
                     st.write(f"   Model lama — Val Accuracy: **{old_acc*100:.2f}%**")
 
                     st.write(f"🧠 Melatih model baru ({ft_epochs} epoch, lr={ft_lr:.0e})...")
