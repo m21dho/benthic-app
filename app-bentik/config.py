@@ -33,7 +33,7 @@ CLASS_COLORS = {
 }
 
 IMG_SIZE = 224
-CONFIDENCE_THRESHOLD = 0.7
+CONFIDENCE_THRESHOLD = 0.6
 
 # ============================================================
 # PATH MODEL
