@@ -13,8 +13,7 @@ CLASS_NAMES = ["Alga", "Karang", "Lainnya", "Lamun", "Pasir"]
 # Urutan HARUS sama dengan sorted(os.listdir(TRAIN_DIR)) saat training:
 #   alga, karang, lainnya, lamun, pasir (alfabetis)
 
-# Ikon kecil per kelas (bentuk warna konsisten — gunanya menyamakan warna
-# yang dipakai di badge, kartu status dataset, dan bar chart prediksi)
+# Ikon kecil per kelas (warna konsisten dipakai di badge & bar chart prediksi)
 CLASS_ICONS = {
     "Alga": "🟢",
     "Karang": "🟠",
@@ -34,8 +33,7 @@ CLASS_COLORS = {
 }
 
 IMG_SIZE = 224
-CONFIDENCE_THRESHOLD = 0.5
-MIN_IMAGES_PER_CLASS = 25  # Batas minimum citra per kelas untuk retrain
+CONFIDENCE_THRESHOLD = 0.7
 
 # ============================================================
 # PATH MODEL
@@ -50,16 +48,14 @@ MODEL_FILENAME = "mobilenetv2_bentik_streamlit_fixed.keras"
 def get_hf_config():
     """
     Ambil konfigurasi HF Hub dari st.secrets atau environment variable.
-    Return dict {"token", "model_repo", "dataset_repo"} atau None jika belum lengkap.
+    Return dict {"token", "model_repo"} atau None jika belum lengkap.
 
     Cara set di Streamlit Cloud: Settings → Secrets →
         HF_TOKEN = "hf_xxxxx"
         HF_MODEL_REPO = "username/bentik-model"
-        HF_DATASET_REPO = "username/bentik-dataset"
     """
     token = st.secrets.get("HF_TOKEN", os.environ.get("HF_TOKEN", ""))
     model_repo = st.secrets.get("HF_MODEL_REPO", os.environ.get("HF_MODEL_REPO", ""))
-    dataset_repo = st.secrets.get("HF_DATASET_REPO", os.environ.get("HF_DATASET_REPO", ""))
-    if token and model_repo and dataset_repo:
-        return {"token": token, "model_repo": model_repo, "dataset_repo": dataset_repo}
+    if token and model_repo:
+        return {"token": token, "model_repo": model_repo}
     return None
