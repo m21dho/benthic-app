@@ -34,7 +34,7 @@ CLASS_COLORS = {
 }
 
 IMG_SIZE = 224
-CONFIDENCE_THRESHOLD = 0.7
+CONFIDENCE_THRESHOLD = 0.6
 MIN_IMAGES_PER_CLASS = 25  # Batas minimum citra per kelas untuk retrain
 
 # ============================================================
