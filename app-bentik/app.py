@@ -1,55 +1,48 @@
 """
 app.py — Lapisan UI Streamlit.
-Aplikasi ini KHUSUS untuk klasifikasi (tidak ada fitur upload dataset/training
-dari web). Logika model ada di model_utils.py & hf_hub_utils.py.
+Murni klasifikasi. Semua hasil ditampilkan via HTML kustom (styles.py),
+tidak ada chart Altair atau dataframe generik untuk confidence.
 """
 import os
 import warnings
 
 import streamlit as st
-import pandas as pd
-import altair as alt
 from PIL import Image
 
 from config import (
-    CLASS_NAMES, CLASS_COLORS, IMG_SIZE, CONFIDENCE_THRESHOLD,
+    CLASS_NAMES, IMG_SIZE, CONFIDENCE_THRESHOLD,
     MODEL_FOLDER, MODEL_FILENAME, get_hf_config,
 )
 from hf_hub_utils import hf_download_model
 from model_utils import load_model_cached, classify_image, compute_gradcam_overlay
-from styles import CSS, render_hero, render_prediction_card, render_not_detected_card, render_footer
+from styles import (
+    CSS,
+    render_header,
+    render_section,
+    render_result_card,
+    render_not_detected_card,
+    render_sonar_readout,
+    render_img_label,
+    render_gradcam_header,
+    render_footer,
+)
 
 warnings.filterwarnings("ignore")
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
 
 # ============================================================
-# PAGE CONFIG & TEMA
+# PAGE CONFIG & CSS
 # ============================================================
 st.set_page_config(
-    page_title="Klasifikasi Habitat Bentik",
+    page_title="Habitat Bentik",
     page_icon="🌊",
     layout="centered",
 )
 st.markdown(CSS, unsafe_allow_html=True)
 
-st.markdown(
-    render_hero(
-        "🌊 Klasifikasi Habitat Bentik",
-        "Identifikasi tutupan dasar laut dari foto bawah air — alga, karang, "
-        "lamun, pasir, atau lainnya.",
-    ),
-    unsafe_allow_html=True,
-)
-
-with st.expander("ℹ️ Cara pakai"):
-    st.markdown(
-        "Upload gambar habitat bentik, lalu klik **Jalankan klasifikasi**. "
-        "Hasil prediksi, confidence semua kelas, dan area fokus model (Grad-CAM) "
-        "akan ditampilkan.\n\n"
-        f"Model menerima gambar {IMG_SIZE}×{IMG_SIZE}px, dengan confidence threshold "
-        f"{CONFIDENCE_THRESHOLD*100:.0f}%."
-    )
+# Header
+st.markdown(render_header(), unsafe_allow_html=True)
 
 
 # ============================================================
@@ -68,16 +61,16 @@ debug_lines = []
 
 if not st.session_state.model_loaded:
     if hf_available and not os.path.exists(model_path):
-        debug_lines.append(f"Mencari di HF Hub repo: {hf_cfg['model_repo']}, file: {MODEL_FILENAME}")
-        with st.spinner("⏳ Mengunduh model dari Hugging Face Hub..."):
+        debug_lines.append(f"Mencari di HF Hub repo: {hf_cfg['model_repo']}")
+        with st.spinner("Mengunduh model dari Hugging Face Hub..."):
             downloaded, dl_error = hf_download_model(hf_cfg, local_dir=MODEL_FOLDER)
             if downloaded:
                 model_path = os.path.join(MODEL_FOLDER, MODEL_FILENAME)
-                debug_lines.append(f"✅ Download dari HF Hub berhasil: {downloaded}")
+                debug_lines.append("Download berhasil")
             else:
-                debug_lines.append(f"❌ Download dari HF Hub gagal: {dl_error}")
+                debug_lines.append(f"Download gagal: {dl_error}")
     elif not hf_available:
-        debug_lines.append("HF Hub tidak terkonfigurasi (cek Secrets) — mencoba path lokal saja.")
+        debug_lines.append("HF Hub tidak terkonfigurasi — mencoba path lokal.")
 
     if os.path.exists(model_path):
         model, status = load_model_cached(model_path)
@@ -91,143 +84,141 @@ if not st.session_state.model_loaded:
     st.session_state.model_debug = "\n".join(debug_lines)
 
 if not st.session_state.model_loaded:
-    st.error("❌ Model belum berhasil dimuat.")
-    with st.expander("🔍 Detail error (untuk debugging)"):
+    st.error("Model belum berhasil dimuat.")
+    with st.expander("Detail error"):
         st.code(st.session_state.model_debug or "(tidak ada info)")
+    st.stop()
 
 
 # ============================================================
-# KLASIFIKASI
+# UPLOAD GAMBAR
 # ============================================================
-st.markdown("#### Upload gambar habitat bentik")
+st.markdown(render_section("▸ input // upload_citra"), unsafe_allow_html=True)
 
 uploaded_image = st.file_uploader(
-    "Upload gambar untuk diklasifikasi",
+    "Seret foto bawah air ke sini, atau klik untuk memilih",
     type=["jpg", "jpeg", "png", "bmp", "tiff"],
-    help="Format: JPG, PNG, BMP, TIFF",
+    label_visibility="visible",
     key="classify_uploader",
 )
 
-if uploaded_image is not None and st.session_state.model_loaded:
-    col1, col2 = st.columns(2)
-    pil_image = Image.open(uploaded_image)
+if uploaded_image is None:
+    st.markdown(
+        '<p style="font-family:\'Space Mono\',monospace!important;font-size:0.72rem;'
+        'color:#2D5E52!important;text-align:center;padding:0.5rem 0;">'
+        'JPG · PNG · BMP · TIFF</p>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(render_footer(), unsafe_allow_html=True)
+    st.stop()
 
-    with col1:
-        st.markdown("**📸 Gambar input**")
-        st.image(pil_image, width="stretch")
 
-    with col2:
-        st.markdown("**🔍 Informasi gambar**")
-        st.info(
-            f"**Dimensi:** {pil_image.width} × {pil_image.height} px\n\n"
-            f"**Ukuran file:** {uploaded_image.size / 1024:.2f} KB"
-        )
+# ============================================================
+# GAMBAR TERUPLOAD
+# ============================================================
+pil_image = Image.open(uploaded_image)
 
-    # Reset hasil lama kalau gambar yang di-upload berganti
-    fingerprint = (uploaded_image.name, uploaded_image.size)
-    if st.session_state.get("classify_fingerprint") != fingerprint:
-        st.session_state.pop("classify_result", None)
-        st.session_state["classify_fingerprint"] = fingerprint
+col1, col2 = st.columns([3, 2])
+
+with col1:
+    st.markdown(render_img_label("preview"), unsafe_allow_html=True)
+    st.image(pil_image, width="stretch")
+
+with col2:
+    st.markdown(render_img_label("metadata"), unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="bk-meta">'
+        f'<div class="bk-meta-row"><span>Lebar</span><span>{pil_image.width} px</span></div>'
+        f'<div class="bk-meta-row"><span>Tinggi</span><span>{pil_image.height} px</span></div>'
+        f'<div class="bk-meta-row"><span>Ukuran</span><span>{uploaded_image.size/1024:.1f} KB</span></div>'
+        f'<div class="bk-meta-row"><span>Format</span><span>{pil_image.format or "—"}</span></div>'
+        f'<div class="bk-meta-row"><span>Mode</span><span>{pil_image.mode}</span></div>'
+        f'</div>'
+        f'<style>'
+        f'.bk-meta{{background:rgba(5,17,26,0.85);border:1px solid rgba(14,139,112,0.18);'
+        f'border-radius:12px;padding:0.9rem 1rem;font-family:"Space Mono",monospace!important;}}'
+        f'.bk-meta-row{{display:flex;justify-content:space-between;align-items:center;'
+        f'padding:0.35rem 0;border-top:1px solid rgba(255,255,255,0.04);font-size:0.72rem;}}'
+        f'.bk-meta-row:first-child{{border-top:none;}}'
+        f'.bk-meta-row span:first-child{{color:#7AB8A8!important;}}'
+        f'.bk-meta-row span:last-child{{color:#C7F2E8!important;font-weight:700;}}'
+        f'</style>',
+        unsafe_allow_html=True,
+    )
+
+st.markdown("<div style='height:0.4rem'></div>", unsafe_allow_html=True)
+
+# Reset hasil lama kalau gambar berganti
+fingerprint = (uploaded_image.name, uploaded_image.size)
+if st.session_state.get("classify_fingerprint") != fingerprint:
+    st.session_state.pop("classify_result", None)
+    st.session_state["classify_fingerprint"] = fingerprint
+    st.session_state["classify_image"] = pil_image
+
+if st.button("Jalankan klasifikasi →", width="stretch", type="primary"):
+    try:
+        with st.spinner("Memproses..."):
+            result = classify_image(st.session_state.loaded_model, pil_image)
+        st.session_state["classify_result"] = result
         st.session_state["classify_image"] = pil_image
+    except Exception as e:
+        st.error(f"Error: {e}")
 
-    if st.button("🚀 Jalankan klasifikasi", width="stretch", type="primary"):
-        try:
-            with st.spinner("⏳ Memproses gambar..."):
-                result = classify_image(st.session_state.loaded_model, pil_image)
-            st.session_state["classify_result"] = result
-            st.session_state["classify_image"] = pil_image
-        except Exception as e:
-            st.error(f"❌ Error: {e}")
 
-    if "classify_result" in st.session_state:
-        result = st.session_state["classify_result"]
-        pred_class = result["pred_class"]
-        confidence = result["confidence"]
-        probs = result["probs"]
-        below_threshold = confidence < CONFIDENCE_THRESHOLD
+# ============================================================
+# HASIL KLASIFIKASI
+# ============================================================
+if "classify_result" not in st.session_state:
+    st.markdown(render_footer(), unsafe_allow_html=True)
+    st.stop()
 
-        if below_threshold:
-            st.markdown(render_not_detected_card(confidence), unsafe_allow_html=True)
-        else:
-            st.markdown(render_prediction_card(pred_class, confidence), unsafe_allow_html=True)
+result = st.session_state["classify_result"]
+pred_class = result["pred_class"]
+confidence = result["confidence"]
+probs = result["probs"]
+below_threshold = confidence < CONFIDENCE_THRESHOLD
 
-        st.markdown("**📋 Confidence semua kelas**")
+st.markdown(render_section("▸ output // hasil_klasifikasi"), unsafe_allow_html=True)
 
-        sorted_items = sorted(probs.items(), key=lambda x: x[1], reverse=True)
-        chart_df = pd.DataFrame(sorted_items, columns=["Kelas", "Confidence"])
-
-        color_scale = alt.Scale(
-            domain=[k for k, _ in sorted_items],
-            range=[CLASS_COLORS.get(k, {"accent": "#888"})["accent"] for k, _ in sorted_items],
-        )
-        chart = (
-            alt.Chart(chart_df)
-            .mark_bar(cornerRadiusTopRight=6, cornerRadiusBottomRight=6, size=22)
-            .encode(
-                x=alt.X("Confidence:Q", title="Confidence (%)", scale=alt.Scale(domain=[0, 100])),
-                y=alt.Y("Kelas:N", sort="-x", title=None),
-                color=alt.Color("Kelas:N", scale=color_scale, legend=None),
-                tooltip=["Kelas", alt.Tooltip("Confidence:Q", format=".2f")],
-            )
-            .properties(height=180)
-        )
-        st.altair_chart(chart, width="stretch")
-
-        df = pd.DataFrame(
-            [(k, f"{v:.2f}%") for k, v in sorted_items],
-            columns=["Kelas", "Confidence (%)"],
-        )
-        st.dataframe(df, width="stretch", hide_index=True)
-
-        # ── Grad-CAM ──
-        st.markdown("---")
-        st.markdown("**🔥 Grad-CAM — area fokus model**")
-        st.caption(
-            "Warna merah/kuning menandai bagian gambar yang paling memengaruhi "
-            "prediksi model. Biru/hijau berarti area itu kurang berpengaruh."
-        )
-
-        gradcam_class = st.selectbox(
-            "Lihat fokus model untuk kelas:",
-            CLASS_NAMES,
-            index=CLASS_NAMES.index(pred_class),
-            key="gradcam_class_select",
-        )
-        target_idx = CLASS_NAMES.index(gradcam_class)
-        cam_image = st.session_state.get("classify_image", pil_image)
-
-        with st.spinner("🔥 Menghitung Grad-CAM..."):
-            overlay_img = compute_gradcam_overlay(
-                st.session_state.loaded_model, cam_image, pred_index=target_idx
-            )
-
-        if overlay_img is not None:
-            gc1, gc2 = st.columns(2)
-            with gc1:
-                st.markdown("Gambar asli")
-                st.image(cam_image.convert("RGB").resize((IMG_SIZE, IMG_SIZE)), width="stretch")
-            with gc2:
-                st.markdown(f"Fokus model: {gradcam_class}")
-                st.image(overlay_img, width="stretch")
-        else:
-            st.info(
-                "Grad-CAM tidak tersedia untuk arsitektur model ini "
-                "(tidak ditemukan layer feature-map yang cocok)."
-            )
-
-elif uploaded_image is not None and not st.session_state.model_loaded:
-    st.warning("⚠️ Model belum dimuat. Lihat detail error di atas.")
+if below_threshold:
+    st.markdown(render_not_detected_card(confidence), unsafe_allow_html=True)
 else:
-    if st.session_state.model_loaded:
-        st.info("📤 Silakan upload gambar untuk diklasifikasi.")
-    else:
-        st.error("❌ Model belum aktif. Lihat detail error di atas.")
+    st.markdown(render_result_card(pred_class, confidence), unsafe_allow_html=True)
+
+# Sonar readout — semua kelas
+st.markdown(render_section("▸ scan // confidence_matrix"), unsafe_allow_html=True)
+st.markdown(render_sonar_readout(probs), unsafe_allow_html=True)
 
 
 # ============================================================
-# FOOTER
+# GRAD-CAM
 # ============================================================
-st.markdown(
-    render_footer("🌊 Klasifikasi Habitat Bentik · Streamlit + TensorFlow + Hugging Face Hub"),
-    unsafe_allow_html=True,
+st.markdown(render_section("▸ visual // grad_cam"), unsafe_allow_html=True)
+st.markdown(render_gradcam_header(), unsafe_allow_html=True)
+
+gradcam_class = st.selectbox(
+    "Kelas target:",
+    CLASS_NAMES,
+    index=CLASS_NAMES.index(pred_class),
+    key="gradcam_class_select",
 )
+target_idx = CLASS_NAMES.index(gradcam_class)
+cam_image = st.session_state.get("classify_image", pil_image)
+
+with st.spinner("Menghitung aktivasi..."):
+    overlay_img = compute_gradcam_overlay(
+        st.session_state.loaded_model, cam_image, pred_index=target_idx
+    )
+
+if overlay_img is not None:
+    gc1, gc2 = st.columns(2)
+    with gc1:
+        st.markdown(render_img_label("original"), unsafe_allow_html=True)
+        st.image(cam_image.convert("RGB").resize((IMG_SIZE, IMG_SIZE)), width="stretch")
+    with gc2:
+        st.markdown(render_img_label(f"fokus → {gradcam_class}"), unsafe_allow_html=True)
+        st.image(overlay_img, width="stretch")
+else:
+    st.caption("Grad-CAM tidak tersedia untuk arsitektur model ini.")
+
+st.markdown(render_footer(), unsafe_allow_html=True)
