@@ -14,27 +14,28 @@ CSS = """
 @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&family=Space+Mono:wght@400;700&display=swap');
 
 /* ── Sembunyikan semua chrome bawaan Streamlit ── */
-#MainMenu,
-header[data-testid="stHeader"],
-footer,
-[data-testid="stToolbar"],
-[data-testid="stDecoration"],
-[data-testid="stStatusWidget"],
-button[title="View fullscreen"],
-button[aria-label="View fullscreen"],
-[data-testid="manage-app-button"] {
-    display: none !important;
-    visibility: hidden !important;
-}
+/* Gunakan banyak selector sekaligus untuk memastikan terkena */
+[data-testid="stHeader"] { display: none !important; }
+[data-testid="stDecoration"] { display: none !important; }
+[data-testid="stToolbar"] { display: none !important; }
+[data-testid="stStatusWidget"] { display: none !important; }
+[data-testid="manage-app-button"] { display: none !important; }
+#MainMenu { display: none !important; }
+footer { display: none !important; }
+.stApp > header { display: none !important; height: 0 !important; }
+
+/* Hapus padding atas yang tersisa setelah header disembunyikan */
+[data-testid="stAppViewContainer"] { padding-top: 0 !important; margin-top: 0 !important; }
+.stApp { padding-top: 0 !important; }
+section.main { padding-top: 0 !important; }
 
 /* ── Background halaman ── */
 [data-testid="stAppViewContainer"],
 [data-testid="stMain"],
 .main,
-[data-testid="block-container"] {
+.stApp {
     background: #05111A !important;
 }
-.stApp { background: #05111A !important; }
 
 /* ── Layout ── */
 .block-container {
@@ -42,8 +43,21 @@ button[aria-label="View fullscreen"],
     max-width: 800px !important;
 }
 
-/* ── Tipografi global ── */
-html, body, * {
+/* ── Tipografi: HINDARI selector * yang terlalu luas
+       karena akan merusak font ikon Material Symbols Streamlit
+       (ikon 'upload' → tampil sebagai teks "uploadupload")
+       Targetkan elemen spesifik saja ── */
+body, html {
+    font-family: 'DM Sans', sans-serif;
+    color: #C7F2E8;
+    background: #05111A;
+}
+p, label, li, td, th, small, div.stMarkdown,
+.streamlit-expanderHeader, .streamlit-expanderContent,
+[data-testid="stText"], [data-testid="stCaptionContainer"],
+[data-testid="stMarkdownContainer"],
+[data-testid="stSelectbox"] label,
+[data-testid="stFileUploader"] label {
     font-family: 'DM Sans', sans-serif !important;
     color: #C7F2E8 !important;
 }
@@ -59,7 +73,6 @@ hr {
     background: rgba(14,139,112,0.07) !important;
     border: 1px solid rgba(14,139,112,0.18) !important;
     border-radius: 10px !important;
-    color: #7AB8A8 !important;
     font-size: 0.88rem !important;
 }
 .streamlit-expanderContent {
@@ -70,30 +83,34 @@ hr {
 }
 
 /* ── File uploader ── */
-[data-testid="stFileUploader"] > div > div {
+[data-testid="stFileUploader"] section,
+[data-testid="stFileUploaderDropzone"] {
     background: rgba(14,139,112,0.04) !important;
     border: 2px dashed rgba(14,139,112,0.35) !important;
     border-radius: 18px !important;
     transition: border-color 0.2s, background 0.2s;
 }
-[data-testid="stFileUploader"] > div > div:hover {
+[data-testid="stFileUploaderDropzone"]:hover {
     border-color: rgba(24,201,154,0.6) !important;
     background: rgba(14,139,112,0.08) !important;
 }
-[data-testid="stFileUploader"] section {
-    background: transparent !important;
-    border: none !important;
+/* Tombol browse di dalam dropzone */
+[data-testid="stFileUploaderDropzone"] button {
+    background: rgba(14,139,112,0.15) !important;
+    border: 1px solid rgba(14,139,112,0.35) !important;
+    border-radius: 8px !important;
+    color: #18C99A !important;
 }
-[data-testid="stFileUploaderDropzone"] {
-    background: transparent !important;
+/* Teks & ikon di dalam button — JANGAN override font-family ikon Material */
+[data-testid="stFileUploaderDropzone"] button p,
+[data-testid="stFileUploaderDropzone"] button span:not([data-testid]):not([class*="material"]) {
+    color: #18C99A !important;
+    font-family: 'DM Sans', sans-serif !important;
 }
 [data-testid="stFileUploaderDropzoneInstructions"] small,
 [data-testid="stFileUploaderDropzoneInstructions"] p {
     color: #7AB8A8 !important;
-}
-[data-testid="stFileUploader"] label {
-    color: #7AB8A8 !important;
-    font-size: 0.85rem !important;
+    font-family: 'DM Sans', sans-serif !important;
 }
 
 /* ── Tombol utama ── */
@@ -106,24 +123,17 @@ button[kind="primary"] {
     font-size: 0.95rem !important;
     color: #05111A !important;
     padding: 0.65rem 1.4rem !important;
-    letter-spacing: 0.01em;
     box-shadow: 0 4px 20px rgba(14,139,112,0.3) !important;
-    transition: opacity 0.15s, box-shadow 0.15s !important;
 }
 button[kind="primary"]:hover {
     opacity: 0.88 !important;
     box-shadow: 0 6px 28px rgba(24,201,154,0.4) !important;
 }
-button[kind="primary"] p { color: #05111A !important; font-weight: 600 !important; }
-
-/* ── Tombol sekunder ── */
-button[kind="secondary"] {
-    background: rgba(14,139,112,0.1) !important;
-    border: 1px solid rgba(14,139,112,0.28) !important;
-    border-radius: 10px !important;
-    color: #18C99A !important;
+button[kind="primary"] p {
+    color: #05111A !important;
+    font-family: 'DM Sans', sans-serif !important;
+    font-weight: 600 !important;
 }
-button[kind="secondary"] p { color: #18C99A !important; }
 
 /* ── Spinner ── */
 .stSpinner > div { border-top-color: #18C99A !important; }
@@ -134,13 +144,10 @@ button[kind="secondary"] p { color: #18C99A !important; }
     border: 1px solid rgba(14,139,112,0.25) !important;
     border-radius: 10px !important;
     color: #C7F2E8 !important;
-}
-[data-testid="stSelectbox"] label {
-    color: #7AB8A8 !important;
-    font-size: 0.85rem !important;
+    font-family: 'DM Sans', sans-serif !important;
 }
 
-/* ── Dataframe / st.info / st.error → sembunyikan karena diganti HTML ── */
+/* ── Alert box ── */
 [data-testid="stAlert"] {
     border-radius: 12px !important;
     border-left-width: 3px !important;
@@ -153,14 +160,11 @@ button[kind="secondary"] p { color: #18C99A !important; }
     box-shadow: 0 8px 30px rgba(0,0,0,0.4) !important;
 }
 
-/* ── Markdown heading ── */
-h4 { color: #C7F2E8 !important; }
-p { color: #C7F2E8 !important; }
-
 /* ── Caption ── */
 [data-testid="stCaptionContainer"] p {
     color: #7AB8A8 !important;
     font-size: 0.82rem !important;
+    font-family: 'DM Sans', sans-serif !important;
 }
 </style>
 """
