@@ -119,6 +119,7 @@ hr { border-color: rgba(14,139,112,0.18) !important; margin: 1.6rem 0 !important
     border-color: rgba(24,201,154,0.6) !important;
 }
 /* Label "Pilih Gambar" sebagai overlay — pointer-events:none agar klik tembus ke button */
+/* PENTING: background harus solid agar file info di baliknya tertutup */
 [data-testid="stFileUploaderDropzone"]::after {
     content: "Pilih Gambar" !important;
     position: absolute !important;
@@ -126,6 +127,7 @@ hr { border-color: rgba(14,139,112,0.18) !important; margin: 1.6rem 0 !important
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
+    background: rgba(14,139,112,0.10) !important;   /* tutup teks file info di baliknya */
     font-family: 'DM Sans', sans-serif !important;
     font-size: 0.88rem !important;
     font-weight: 500 !important;
