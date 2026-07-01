@@ -69,46 +69,82 @@ hr { border-color: rgba(14,139,112,0.18) !important; margin: 1.6rem 0 !important
     padding: 1rem 1.2rem !important;
 }
 
-/* ── File uploader: collapse ke tombol saja ── */
-/* Hilangkan area dropzone, sisakan hanya tombol browse */
+/* ── File uploader: tampil sebagai tombol "Pilih Gambar" ──
+   PENDEKATAN: ::after pada DROPZONE (bukan span),
+   button transparan mengisi seluruh area → klik tetap bekerja
+   Menghindari manipulasi span yang menyebabkan duplikasi teks ── */
+
+/* Sembunyikan SELURUH label dan instruksi */
+[data-testid="stFileUploader"] > div > label,
+[data-testid="stFileUploader"] > label,
+[data-testid="stFileUploaderDropzoneInstructions"],
+[data-testid="stFileUploaderFile"],
+[data-testid="stFileUploaderDeleteBtn"] {
+    display: none !important;
+}
+
+/* Dropzone: tampil sebagai area tombol persegi */
 [data-testid="stFileUploaderDropzone"] {
-    background: transparent !important;
-    border: none !important;
+    position: relative !important;
+    height: 42px !important;
+    overflow: hidden !important;
+    background: rgba(14,139,112,0.10) !important;
+    border: 1px solid rgba(14,139,112,0.40) !important;
+    border-radius: 10px !important;
+    cursor: pointer !important;
     padding: 0 !important;
     min-height: 0 !important;
 }
-[data-testid="stFileUploaderDropzoneInstructions"] {
-    display: none !important;
+[data-testid="stFileUploaderDropzone"]:hover {
+    background: rgba(14,139,112,0.16) !important;
+    border-color: rgba(24,201,154,0.6) !important;
 }
-/* Style tombol browse agar mirip "Pilih Gambar" */
-[data-testid="stFileUploaderDropzone"] button {
-    background: rgba(14,139,112,0.10) !important;
-    border: 1px solid rgba(14,139,112,0.4) !important;
-    border-radius: 10px !important;
-    padding: 0.5rem 1rem !important;
-    width: 100% !important;
+/* Label "Pilih Gambar" sebagai overlay — pointer-events:none agar klik tembus ke button */
+[data-testid="stFileUploaderDropzone"]::after {
+    content: "Pilih Gambar" !important;
+    position: absolute !important;
+    top: 0; left: 0; right: 0; bottom: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
     font-family: 'DM Sans', sans-serif !important;
-    font-weight: 500 !important;
-}
-/* Ganti teks "Upload" dengan "Pilih Gambar" via CSS */
-[data-testid="stFileUploaderDropzone"] button span:not([class*="material"]) {
-    font-size: 0 !important;           /* sembunyikan teks asli */
-}
-[data-testid="stFileUploaderDropzone"] button span:not([class*="material"])::after {
-    content: "Pilih Gambar";
     font-size: 0.88rem !important;
-    font-family: 'DM Sans', sans-serif !important;
     font-weight: 500 !important;
     color: #18C99A !important;
+    pointer-events: none !important;
     letter-spacing: 0.01em;
+    z-index: 2 !important;
 }
-/* Sembunyikan label file uploader (pakai label_visibility="collapsed" di Python) */
-[data-testid="stFileUploader"] > label { display: none !important; }
-/* Sembunyikan nama file yang sudah dipilih (kita tampilkan sendiri) */
-[data-testid="stFileUploaderFile"] { display: none !important; }
+/* Button transparan mengisi seluruh dropzone → masih bisa diklik */
+[data-testid="stFileUploaderDropzone"] button {
+    position: absolute !important;
+    top: 0; left: 0; right: 0; bottom: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    opacity: 0 !important;        /* transparan — masih menerima klik */
+    cursor: pointer !important;
+    border: none !important;
+    background: transparent !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    z-index: 1 !important;
+}
+
+/* ── Tinggi kolom sama (kiri stretch menyesuaikan kanan) ── */
+[data-testid="stHorizontalBlock"] {
+    align-items: stretch !important;
+}
+[data-testid="column"] {
+    display: flex !important;
+    flex-direction: column !important;
+}
+/* Placeholder gambar mengisi sisa tinggi kolom */
+[data-testid="column"]:first-child [data-testid="stMarkdownContainer"]:first-child {
+    flex: 1 !important;
+    display: flex !important;
+}
 
 /* ── Tombol utama (Klasifikasi) ── */
-button[kind="primary"] {
     background: linear-gradient(135deg, #0E8B70 0%, #18C99A 100%) !important;
     border: none !important;
     border-radius: 10px !important;
@@ -230,6 +266,7 @@ border-radius: 999px; padding: 0.22rem 0.65rem;
 # ============================================================
 def render_img_placeholder() -> str:
     return _c("""
+<div style="display:flex;flex-direction:column;flex:1;height:100%;min-height:240px;">
 <div class="bk-img-ph">
 <svg xmlns="http://www.w3.org/2000/svg" width="52" height="60" viewBox="0 0 52 60" fill="none">
 <rect x="2" y="2" width="38" height="48" rx="5" fill="rgba(12,42,61,0.5)"
@@ -249,20 +286,22 @@ font-size="5.5" font-weight="700" fill="rgba(14,139,112,0.65)">IMG</text>
 </svg>
 <p class="bk-ph-hint">Pilih gambar di bawah</p>
 </div>
+</div>
 <style>
-.bk-img-ph {{
+.bk-img-ph {
+flex: 1;
 background: rgba(12,42,61,0.3);
 border: 2px dashed rgba(14,139,112,0.2);
 border-radius: 16px;
 display: flex; flex-direction: column;
 align-items: center; justify-content: center;
-min-height: 255px; width: 100%; gap: 0.75rem;
-}}
-.bk-ph-hint {{
+width: 100%; gap: 0.75rem;
+}
+.bk-ph-hint {
 font-family: 'Space Mono', monospace !important;
 font-size: 0.6rem !important; letter-spacing: 0.12em;
 text-transform: uppercase; color: #2D5E52 !important; margin: 0 !important;
-}}
+}
 </style>
 """)
 
