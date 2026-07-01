@@ -83,6 +83,16 @@ hr { border-color: rgba(14,139,112,0.18) !important; margin: 1.6rem 0 !important
     display: none !important;
 }
 
+/* FIX BUG: File info (nama file, ukuran, tombol hapus) muncul sebagai
+   SIBLING di luar dropzone setelah file dipilih — harus disembunyikan
+   dengan cara menarget elemen sibling dropzone dan semua list file */
+[data-testid="stFileUploaderDropzone"] ~ *,
+[data-testid="stFileUploader"] ul,
+[data-testid="stFileUploader"] li,
+[data-testid="stFileUploader"] small {
+    display: none !important;
+}
+
 /* Dropzone: tampil sebagai area tombol persegi */
 [data-testid="stFileUploaderDropzone"] {
     position: relative !important;
@@ -121,7 +131,7 @@ hr { border-color: rgba(14,139,112,0.18) !important; margin: 1.6rem 0 !important
     top: 0; left: 0; right: 0; bottom: 0 !important;
     width: 100% !important;
     height: 100% !important;
-    opacity: 0 !important;        /* transparan — masih menerima klik */
+    opacity: 0 !important;
     cursor: pointer !important;
     border: none !important;
     background: transparent !important;
@@ -144,7 +154,13 @@ hr { border-color: rgba(14,139,112,0.18) !important; margin: 1.6rem 0 !important
     display: flex !important;
 }
 
-/* ── Tombol utama (Klasifikasi) ── */
+/* ── Tombol Klasifikasi ──
+   Gunakan BANYAK selector karena di Streamlit 1.58 'kind' attribute
+   bisa bervariasi cara rendernya */
+button[kind="primary"],
+[data-testid="stBaseButton-primary"],
+[data-testid="baseButton-primary"],
+.stButton > button {
     background: linear-gradient(135deg, #0E8B70 0%, #18C99A 100%) !important;
     border: none !important;
     border-radius: 10px !important;
@@ -154,12 +170,25 @@ hr { border-color: rgba(14,139,112,0.18) !important; margin: 1.6rem 0 !important
     color: #05111A !important;
     box-shadow: 0 4px 18px rgba(14,139,112,0.28) !important;
 }
-button[kind="primary"]:hover {
+button[kind="primary"]:hover,
+[data-testid="stBaseButton-primary"]:hover,
+.stButton > button:hover {
     opacity: 0.88 !important;
     box-shadow: 0 6px 24px rgba(24,201,154,0.38) !important;
 }
-button[kind="primary"] p { color: #05111A !important; font-weight: 600 !important; font-family: 'DM Sans', sans-serif !important; }
-button[kind="primary"]:disabled { opacity: 0.35 !important; }
+button[kind="primary"] p,
+[data-testid="stBaseButton-primary"] p,
+.stButton > button p {
+    color: #05111A !important;
+    font-weight: 600 !important;
+    font-family: 'DM Sans', sans-serif !important;
+}
+button[kind="primary"]:disabled,
+[data-testid="stBaseButton-primary"]:disabled,
+.stButton > button:disabled {
+    opacity: 0.35 !important;
+    background: rgba(14,139,112,0.25) !important;
+}
 
 /* ── Spinner ── */
 .stSpinner > div { border-top-color: #18C99A !important; }
@@ -396,12 +425,19 @@ def render_output_not_detected() -> str:
 <div class="bk-out" style="--acc:#4A6470;background:rgba(12,42,61,0.45);">
 <div class="bk-out-ey">Output kelas</div>
 <div class="bk-out-main">
-<span class="bk-out-ico">❓</span>
+<span class="bk-out-ico">
+<svg width="30" height="30" viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+<circle cx="15" cy="15" r="13" stroke="#4A6470" stroke-width="1.8"/>
+<text x="15" y="20.5" text-anchor="middle"
+font-family="Georgia,serif" font-size="16" font-weight="700"
+fill="#4A6470">?</text>
+</svg>
+</span>
 <span class="bk-out-name" style="color:#7AB8A8!important;">Tidak terdeteksi</span>
 </div>
 <p style="font-family:'DM Sans',sans-serif!important;font-size:0.78rem;
-color:#7AB8A8!important;margin:0;line-height:1.5;">
-Coba foto ulang dengan pencahayaan lebih baik.</p>
+color:#7AB8A8!important;margin:0.4rem 0 0;line-height:1.5;">
+Confidence terlalu rendah. Coba foto ulang dengan pencahayaan lebih baik.</p>
 </div>
 """)
 
