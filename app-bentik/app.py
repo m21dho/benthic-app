@@ -133,10 +133,9 @@ with col_res:
     else:
         st.markdown(render_placeholder_card("output kelas", "100px"), unsafe_allow_html=True)
 
-    # Grad-CAM
-    st.markdown(render_img_label("grad-cam"), unsafe_allow_html=True)
-
+    # Grad-CAM — label dan konten hanya tampil jika sudah ada hasil
     if has_result and has_image:
+        st.markdown(render_img_label("grad-cam"), unsafe_allow_html=True)
         # Selectbox kelas target grad-cam (di sini agar nilainya langsung tersedia)
         default_cls = st.session_state.classify_result["pred_class"]
         default_idx = CLASS_NAMES.index(default_cls)
@@ -172,9 +171,10 @@ st.markdown("<div style='height:0.6rem'></div>", unsafe_allow_html=True)
 btn_col1, btn_col2, _ = st.columns([1.3, 1.3, 3])
 
 with btn_col1:
-    # File uploader distyling via CSS menjadi tombol "Pilih Gambar"
+    # File uploader: label kosong + label_visibility collapsed
+    # CSS menjadikan area dropzone terlihat sebagai tombol "Pilih Gambar"
     uploaded_file = st.file_uploader(
-        "upload",
+        "Pilih gambar habitat bentik",
         type=["jpg", "jpeg", "png", "bmp", "tiff"],
         label_visibility="collapsed",
         key="file_uploader",
