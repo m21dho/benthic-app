@@ -93,6 +93,15 @@ hr { border-color: rgba(14,139,112,0.18) !important; margin: 1.6rem 0 !important
     display: none !important;
 }
 
+/* FIX DEFINITIF: Clip seluruh container file uploader ke tinggi tombol.
+   Apapun posisi DOM file info (sibling, child, nested) — tidak akan
+   terlihat karena overflow tersembunyi di batas 42px. */
+[data-testid="stFileUploader"],
+[data-testid="stFileUploader"] > div {
+    max-height: 42px !important;
+    overflow: hidden !important;
+}
+
 /* Dropzone: tampil sebagai area tombol persegi */
 [data-testid="stFileUploaderDropzone"] {
     position: relative !important;
@@ -435,7 +444,9 @@ fill="#4A6470">?</text>
 </span>
 <span class="bk-out-name" style="color:#7AB8A8!important;">Tidak terdeteksi</span>
 </div>
-
+<p style="font-family:'DM Sans',sans-serif!important;font-size:0.78rem;
+color:#7AB8A8!important;margin:0.4rem 0 0;line-height:1.5;">
+Confidence terlalu rendah. Coba foto ulang dengan pencahayaan lebih baik.</p>
 </div>
 """)
 
