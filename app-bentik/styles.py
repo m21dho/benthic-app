@@ -263,7 +263,7 @@ menggunakan model MobileNetV2 yang telah dilatih khusus.</p>
 </div>
 <style>
 .bk-header {{
-position: relative; padding: 2.6rem 0 1.8rem; overflow: hidden;
+position: relative; padding: 2.6rem 0 1.8rem;
 }}
 .bk-header-glow {{
 position: absolute; top: -60px; left: -80px;
