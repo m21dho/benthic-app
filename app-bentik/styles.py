@@ -435,9 +435,7 @@ fill="#4A6470">?</text>
 </span>
 <span class="bk-out-name" style="color:#7AB8A8!important;">Tidak terdeteksi</span>
 </div>
-<p style="font-family:'DM Sans',sans-serif!important;font-size:0.78rem;
-color:#7AB8A8!important;margin:0.4rem 0 0;line-height:1.5;">
-Confidence terlalu rendah. Coba foto ulang dengan pencahayaan lebih baik.</p>
+
 </div>
 """)
 
