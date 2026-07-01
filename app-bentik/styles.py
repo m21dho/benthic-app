@@ -255,7 +255,7 @@ def render_header() -> str:
     return _c(f"""
 <div class="bk-header">
 <div class="bk-header-glow"></div>
-<div class="bk-eyebrow">Sistem Identifikasi</div>
+<div class="bk-eyebrow">Sistem Klasifikasi</div>
 <h1 class="bk-title">Habitat Bentik</h1>
 <p class="bk-sub">Identifikasi tutupan dasar laut dari foto bawah air
 menggunakan model MobileNetV2 yang telah dilatih khusus.</p>
