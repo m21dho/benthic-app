@@ -188,6 +188,17 @@ with btn_col2:
         disabled=not has_image,
     )
 
+# Tampilkan nama file di bawah tombol (dari session_state, bukan dari widget Streamlit)
+if st.session_state.classify_fingerprint is not None:
+    fname, fsize_bytes = st.session_state.classify_fingerprint
+    fsize_str = f"{fsize_bytes/1024:.1f} KB"
+    st.markdown(
+        f'<p style="font-family:\'Space Mono\',monospace!important;'
+        f'font-size:0.65rem;color:#2D5E52!important;margin:0.35rem 0 0;'
+        f'letter-spacing:0.04em;">✓ {fname} &nbsp;·&nbsp; {fsize_str}</p>',
+        unsafe_allow_html=True,
+    )
+
 
 # ============================================================
 # PROSES WIDGET VALUES
