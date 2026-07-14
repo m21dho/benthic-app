@@ -62,29 +62,22 @@ for key, default in {
 
 # ============================================================
 # LOAD MODEL — download + load dalam SATU @st.cache_resource
-#
-# KRITIS: ini mencegah "loading loop tak berujung":
-# Sebelumnya, download & load ada di luar cache_resource, sehingga
-# setiap kali Streamlit re-run script (interaksi user, scroll, widget)
-# download dimulai ulang dari awal → loop tanpa henti.
-#
-# Dengan @st.cache_resource, Streamlit me-lock fungsi ini:
-# - Hanya jalan SEKALI per sesi app
-# - Re-run apapun menunggu hasil yang sama (tidak restart download)
-# - Juga memperbaiki bug "path salah" dari hf_hub_download
 # ============================================================
 @st.cache_resource(show_spinner=False)
 def get_model(token: str, model_repo: str, model_folder: str, model_filename: str):
-    """Download (jika perlu) lalu load model. Hanya jalan sekali — di-cache."""
+    """
+    Download (jika perlu) lalu load model.
+    Di-cache oleh Streamlit — hanya jalan SEKALI per sesi.
+    """
     import os
-    from tensorflow.keras.models import load_model as tf_load
 
     local_path = os.path.join(model_folder, model_filename)
 
-    # Step 1: Download dari HF Hub jika belum ada secara lokal
+    # Step 1: Download dari HF Hub jika file belum ada
     if not os.path.exists(local_path):
         if not token or not model_repo:
-            return None, "HF Hub tidak terkonfigurasi dan model tidak ditemukan lokal."
+            return None, "STEP_DOWNLOAD", \
+                "HF Hub tidak terkonfigurasi dan model tidak ditemukan lokal."
         try:
             from huggingface_hub import hf_hub_download
             os.makedirs(model_folder, exist_ok=True)
@@ -94,23 +87,44 @@ def get_model(token: str, model_repo: str, model_folder: str, model_filename: st
                 token=token,
                 local_dir=model_folder,
             )
-            # Pakai path ASLI dari hf_hub_download — bisa berbeda dari rekonstruksi
             if downloaded and os.path.exists(downloaded):
                 local_path = downloaded
             elif not os.path.exists(local_path):
-                return None, f"Download selesai tapi file tidak ditemukan: {downloaded}"
+                return None, "STEP_DOWNLOAD", \
+                    f"Download selesai tapi file tidak ditemukan: {downloaded}"
         except Exception as e:
-            return None, f"Download gagal: {e}"
+            return None, "STEP_DOWNLOAD", f"Download gagal: {e}"
 
-    # Step 2: Load model dengan beberapa metode fallback
-    for kwargs in [{"compile": False, "safe_mode": False}, {"compile": False}, {}]:
+    if not os.path.exists(local_path):
+        return None, "STEP_DOWNLOAD", f"File tidak ditemukan: {local_path}"
+
+    # Step 2: Load model
+    # Keras 3.x (TF 2.21+) → gunakan keras langsung sebagai prioritas
+    loaders = []
+    try:
+        import keras
+        loaders.append(("keras.models.load_model",
+                        lambda: keras.models.load_model(local_path, compile=False)))
+    except ImportError:
+        pass
+    try:
+        from tensorflow.keras.models import load_model as tf_load
+        loaders.append(("tf.keras compile=False",
+                        lambda: tf_load(local_path, compile=False)))
+        loaders.append(("tf.keras default",
+                        lambda: tf_load(local_path)))
+    except ImportError:
+        pass
+
+    errors = []
+    for label, fn in loaders:
         try:
-            model = tf_load(local_path, **kwargs)
-            return model, "OK"
+            model = fn()
+            return model, "STEP_LOAD", f"OK via {label}"
         except Exception as e:
-            last_error = str(e)
+            errors.append(f"{label}: {e}")
 
-    return None, f"Semua metode load gagal: {last_error}"
+    return None, "STEP_LOAD", "Semua metode gagal:\n" + "\n".join(errors)
 
 
 hf_cfg    = get_hf_config()
@@ -118,17 +132,34 @@ token_val = hf_cfg["token"]      if hf_cfg else ""
 repo_val  = hf_cfg["model_repo"] if hf_cfg else ""
 
 if not st.session_state.model_loaded:
-    with st.spinner("⏳ Memuat model... (hanya sekali, mohon tunggu)"):
-        model, status = get_model(token_val, repo_val, MODEL_FOLDER, MODEL_FILENAME)
+    with st.status("Menyiapkan model klasifikasi...", expanded=True) as load_status:
+        st.write("☁️ **Step 1/2** — Mengunduh model dari Hugging Face Hub...")
+        st.write("_(Proses ini hanya terjadi sekali. "
+                 "Ukuran model ~20–50MB, estimasi waktu 1–3 menit.)_")
 
-    if model is not None:
-        st.session_state.loaded_model = model
-        st.session_state.model_loaded = True
-    st.session_state.model_debug = status
+        model, step, status_msg = get_model(
+            token_val, repo_val, MODEL_FOLDER, MODEL_FILENAME
+        )
+
+        if model is not None:
+            st.write("✅ Download selesai")
+            st.write("🧠 **Step 2/2** — Model berhasil dimuat ke memori")
+            load_status.update(label="✅ Model siap!", state="complete", expanded=False)
+            st.session_state.loaded_model = model
+            st.session_state.model_loaded = True
+            st.session_state.model_debug  = status_msg
+        else:
+            fail_step = "download" if step == "STEP_DOWNLOAD" else "load"
+            load_status.update(
+                label=f"❌ Gagal saat {fail_step} model",
+                state="error", expanded=True,
+            )
+            st.write(f"**Error:** {status_msg}")
+            st.session_state.model_debug = status_msg
 
 if not st.session_state.model_loaded:
     st.error("Model belum berhasil dimuat.")
-    with st.expander("Detail error"):
+    with st.expander("Detail error (untuk debugging)"):
         st.code(st.session_state.model_debug or "(tidak ada info)")
     st.stop()
 
