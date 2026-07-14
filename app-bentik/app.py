@@ -18,8 +18,8 @@ from config import (
     CLASS_NAMES, IMG_SIZE, CONFIDENCE_THRESHOLD,
     MODEL_FOLDER, MODEL_FILENAME, get_hf_config,
 )
-from hf_hub_utils import hf_download_model
-from model_utils import load_model_cached, classify_image, compute_gradcam_overlay
+from hf_hub_utils import hf_download_model  # noqa: F401 (kept for potential future use)
+from model_utils import classify_image, compute_gradcam_overlay
 from styles import (
     CSS,
     render_header,
@@ -61,35 +61,70 @@ for key, default in {
 
 
 # ============================================================
-# LOAD MODEL
+# LOAD MODEL — download + load dalam SATU @st.cache_resource
+#
+# KRITIS: ini mencegah "loading loop tak berujung":
+# Sebelumnya, download & load ada di luar cache_resource, sehingga
+# setiap kali Streamlit re-run script (interaksi user, scroll, widget)
+# download dimulai ulang dari awal → loop tanpa henti.
+#
+# Dengan @st.cache_resource, Streamlit me-lock fungsi ini:
+# - Hanya jalan SEKALI per sesi app
+# - Re-run apapun menunggu hasil yang sama (tidak restart download)
+# - Juga memperbaiki bug "path salah" dari hf_hub_download
 # ============================================================
-hf_cfg = get_hf_config()
-model_path = os.path.join(MODEL_FOLDER, MODEL_FILENAME)
-debug_lines = []
+@st.cache_resource(show_spinner=False)
+def get_model(token: str, model_repo: str, model_folder: str, model_filename: str):
+    """Download (jika perlu) lalu load model. Hanya jalan sekali — di-cache."""
+    import os
+    from tensorflow.keras.models import load_model as tf_load
+
+    local_path = os.path.join(model_folder, model_filename)
+
+    # Step 1: Download dari HF Hub jika belum ada secara lokal
+    if not os.path.exists(local_path):
+        if not token or not model_repo:
+            return None, "HF Hub tidak terkonfigurasi dan model tidak ditemukan lokal."
+        try:
+            from huggingface_hub import hf_hub_download
+            os.makedirs(model_folder, exist_ok=True)
+            downloaded = hf_hub_download(
+                repo_id=model_repo,
+                filename=model_filename,
+                token=token,
+                local_dir=model_folder,
+            )
+            # Pakai path ASLI dari hf_hub_download — bisa berbeda dari rekonstruksi
+            if downloaded and os.path.exists(downloaded):
+                local_path = downloaded
+            elif not os.path.exists(local_path):
+                return None, f"Download selesai tapi file tidak ditemukan: {downloaded}"
+        except Exception as e:
+            return None, f"Download gagal: {e}"
+
+    # Step 2: Load model dengan beberapa metode fallback
+    for kwargs in [{"compile": False, "safe_mode": False}, {"compile": False}, {}]:
+        try:
+            model = tf_load(local_path, **kwargs)
+            return model, "OK"
+        except Exception as e:
+            last_error = str(e)
+
+    return None, f"Semua metode load gagal: {last_error}"
+
+
+hf_cfg    = get_hf_config()
+token_val = hf_cfg["token"]      if hf_cfg else ""
+repo_val  = hf_cfg["model_repo"] if hf_cfg else ""
 
 if not st.session_state.model_loaded:
-    if hf_cfg and not os.path.exists(model_path):
-        debug_lines.append(f"Mengunduh dari HF Hub: {hf_cfg['model_repo']}")
-        with st.spinner("Mengunduh model..."):
-            downloaded, dl_error = hf_download_model(hf_cfg, local_dir=MODEL_FOLDER)
-            if downloaded:
-                model_path = os.path.join(MODEL_FOLDER, MODEL_FILENAME)
-                debug_lines.append("Download berhasil")
-            else:
-                debug_lines.append(f"Download gagal: {dl_error}")
-    elif not hf_cfg:
-        debug_lines.append("HF Hub tidak terkonfigurasi — mencoba path lokal.")
+    with st.spinner("⏳ Memuat model... (hanya sekali, mohon tunggu)"):
+        model, status = get_model(token_val, repo_val, MODEL_FOLDER, MODEL_FILENAME)
 
-    if os.path.exists(model_path):
-        model, status = load_model_cached(model_path)
-        debug_lines.append(status)
-        if model is not None:
-            st.session_state.loaded_model = model
-            st.session_state.model_loaded = True
-    else:
-        debug_lines.append(f"Model tidak ditemukan: {model_path}")
-
-    st.session_state.model_debug = "\n".join(debug_lines)
+    if model is not None:
+        st.session_state.loaded_model = model
+        st.session_state.model_loaded = True
+    st.session_state.model_debug = status
 
 if not st.session_state.model_loaded:
     st.error("Model belum berhasil dimuat.")
