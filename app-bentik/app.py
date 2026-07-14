@@ -61,58 +61,67 @@ for key, default in {
 
 
 # ============================================================
-# LOAD MODEL — download + load dalam SATU @st.cache_resource
+# LOAD MODEL
 # ============================================================
 @st.cache_resource(show_spinner=False)
 def get_model(token: str, model_repo: str, model_folder: str, model_filename: str):
     """
-    Download (jika perlu) lalu load model.
-    Di-cache oleh Streamlit — hanya jalan SEKALI per sesi.
+    Load model. Urutan prioritas:
+    1. Cek path lokal di sebelah app.py (model ada di repo GitHub)
+    2. Cek MODEL_FOLDER (sudah pernah didownload sebelumnya)
+    3. Download dari HF Hub sebagai fallback terakhir
+    Di-cache — hanya jalan sekali per sesi app.
     """
     import os
 
-    local_path = os.path.join(model_folder, model_filename)
+    # Matikan XetHub — protocol baru HF yang sering hang di Streamlit Cloud
+    os.environ["HF_HUB_DISABLE_XET"] = "1"
 
-    # Step 1: Download dari HF Hub jika file belum ada
-    if not os.path.exists(local_path):
+    # Path 1: model di sebelah app.py (sudah ada di repo GitHub)
+    script_dir  = os.path.dirname(os.path.abspath(__file__))
+    path_in_repo = os.path.join(script_dir, "models", model_filename)
+
+    # Path 2: model di MODEL_FOLDER (hasil download sebelumnya)
+    path_in_folder = os.path.join(model_folder, model_filename)
+
+    # Tentukan path yang akan dipakai
+    if os.path.exists(path_in_repo):
+        local_path = path_in_repo
+    elif os.path.exists(path_in_folder):
+        local_path = path_in_folder
+    else:
+        # Download dari HF Hub via HTTPS langsung (bukan hf_hub_download)
+        # hf_hub_download sering hang di Streamlit Cloud karena hf-xet protocol
         if not token or not model_repo:
             return None, "STEP_DOWNLOAD", \
-                "HF Hub tidak terkonfigurasi dan model tidak ditemukan lokal."
+                "Model tidak ditemukan lokal dan HF Hub tidak terkonfigurasi."
         try:
-            from huggingface_hub import hf_hub_download
+            import requests
             os.makedirs(model_folder, exist_ok=True)
-            downloaded = hf_hub_download(
-                repo_id=model_repo,
-                filename=model_filename,
-                token=token,
-                local_dir=model_folder,
-            )
-            if downloaded and os.path.exists(downloaded):
-                local_path = downloaded
-            elif not os.path.exists(local_path):
-                return None, "STEP_DOWNLOAD", \
-                    f"Download selesai tapi file tidak ditemukan: {downloaded}"
+            url = (f"https://huggingface.co/{model_repo}"
+                   f"/resolve/main/{model_filename}?download=true")
+            headers = {"Authorization": f"Bearer {token}"}
+            resp = requests.get(url, headers=headers, stream=True, timeout=300)
+            resp.raise_for_status()
+            with open(path_in_folder, "wb") as f:
+                for chunk in resp.iter_content(chunk_size=1024 * 1024):  # 1MB chunks
+                    if chunk:
+                        f.write(chunk)
+            local_path = path_in_folder
         except Exception as e:
             return None, "STEP_DOWNLOAD", f"Download gagal: {e}"
 
-    if not os.path.exists(local_path):
-        return None, "STEP_DOWNLOAD", f"File tidak ditemukan: {local_path}"
-
-    # Step 2: Load model
-    # Keras 3.x (TF 2.21+) → gunakan keras langsung sebagai prioritas
+    # Load model — coba keras 3 dulu, lalu tf.keras sebagai fallback
     loaders = []
     try:
         import keras
-        loaders.append(("keras.models.load_model",
-                        lambda: keras.models.load_model(local_path, compile=False)))
+        loaders.append(("keras 3", lambda: keras.models.load_model(local_path, compile=False)))
     except ImportError:
         pass
     try:
         from tensorflow.keras.models import load_model as tf_load
-        loaders.append(("tf.keras compile=False",
-                        lambda: tf_load(local_path, compile=False)))
-        loaders.append(("tf.keras default",
-                        lambda: tf_load(local_path)))
+        loaders.append(("tf.keras compile=False", lambda: tf_load(local_path, compile=False)))
+        loaders.append(("tf.keras default",        lambda: tf_load(local_path)))
     except ImportError:
         pass
 
@@ -120,11 +129,11 @@ def get_model(token: str, model_repo: str, model_folder: str, model_filename: st
     for label, fn in loaders:
         try:
             model = fn()
-            return model, "STEP_LOAD", f"OK via {label}"
+            return model, "STEP_LOAD", f"OK via {label} — {local_path}"
         except Exception as e:
             errors.append(f"{label}: {e}")
 
-    return None, "STEP_LOAD", "Semua metode gagal:\n" + "\n".join(errors)
+    return None, "STEP_LOAD", "Semua metode load gagal:\n" + "\n".join(errors)
 
 
 hf_cfg    = get_hf_config()
@@ -133,28 +142,27 @@ repo_val  = hf_cfg["model_repo"] if hf_cfg else ""
 
 if not st.session_state.model_loaded:
     with st.status("Menyiapkan model klasifikasi...", expanded=True) as load_status:
-        st.write("☁️ **Step 1/2** — Mengunduh model dari Hugging Face Hub...")
-        st.write("_(Proses ini hanya terjadi sekali. "
-                 "Ukuran model ~20–50MB, estimasi waktu 1–3 menit.)_")
+        st.write("🔍 **Step 1/2** — Mencari & mengunduh model...")
+        st.write("_(Download langsung via HTTPS — estimasi 1–3 menit tergantung ukuran model)_")
 
         model, step, status_msg = get_model(
             token_val, repo_val, MODEL_FOLDER, MODEL_FILENAME
         )
 
         if model is not None:
-            st.write("✅ Download selesai")
-            st.write("🧠 **Step 2/2** — Model berhasil dimuat ke memori")
+            st.write("✅ File model ditemukan & berhasil dimuat")
+            st.write("🧠 **Step 2/2** — Model siap digunakan")
             load_status.update(label="✅ Model siap!", state="complete", expanded=False)
             st.session_state.loaded_model = model
             st.session_state.model_loaded = True
             st.session_state.model_debug  = status_msg
         else:
-            fail_step = "download" if step == "STEP_DOWNLOAD" else "load"
+            fail_step = "download" if step == "STEP_DOWNLOAD" else "load model"
             load_status.update(
-                label=f"❌ Gagal saat {fail_step} model",
+                label=f"❌ Gagal saat {fail_step}",
                 state="error", expanded=True,
             )
-            st.write(f"**Error:** {status_msg}")
+            st.error(f"**Detail error:** {status_msg}")
             st.session_state.model_debug = status_msg
 
 if not st.session_state.model_loaded:
