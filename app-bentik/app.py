@@ -181,7 +181,7 @@ if not st.session_state.model_loaded:
 has_image  = st.session_state.pil_image is not None
 has_result = st.session_state.classify_result is not None
 
-col_img, col_res = st.columns([12, 10], gap="medium")
+col_img, col_res = st.columns([12, 10], gap="small")
 
 # ── Kolom kiri: preview gambar ──
 with col_img:
@@ -240,9 +240,9 @@ with col_res:
 # ============================================================
 # TOMBOL AKSI
 # ============================================================
-st.markdown("<div style='height:0.6rem'></div>", unsafe_allow_html=True)
+st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
 
-btn_col1, btn_col2, _ = st.columns([1.3, 1.3, 3])
+btn_col1, btn_col2 = st.columns(2)
 
 with btn_col1:
     # File uploader: label kosong + label_visibility collapsed
