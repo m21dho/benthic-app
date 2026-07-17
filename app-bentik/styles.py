@@ -656,9 +656,119 @@ background: var(--bc); box-shadow: 0 0 7px 2px var(--bc);
 
 
 # ============================================================
-# FOOTER
+# INFERENCE TIME — waktu klasifikasi
 # ============================================================
-def render_footer() -> str:
+def render_inference_time(inference_ms: float, predict_ms: float, preprocess_ms: float) -> str:
+    """
+    Tampilkan waktu inferensi bergaya readout instrumen ilmiah.
+    Breakdown: preprocessing + predict = total.
+    Warna & label berubah berdasarkan kecepatan.
+    """
+    # Tentukan kategori kecepatan berdasarkan total waktu
+    if inference_ms < 300:
+        label, color, bar_color = "Sangat cepat", "#2E8B57", "#2E8B57"
+        bar_pct = max(5.0, inference_ms / 300 * 40)
+    elif inference_ms < 800:
+        label, color, bar_color = "Cepat", "#0E8B70", "#0E8B70"
+        bar_pct = 40 + (inference_ms - 300) / 500 * 25
+    elif inference_ms < 2000:
+        label, color, bar_color = "Normal", "#B9802E", "#B9802E"
+        bar_pct = 65 + (inference_ms - 800) / 1200 * 20
+    elif inference_ms < 5000:
+        label, color, bar_color = "Lambat", "#C0392B", "#C0392B"
+        bar_pct = 85 + (inference_ms - 2000) / 3000 * 10
+    else:
+        label, color, bar_color = "Sangat lambat", "#8B0000", "#8B0000"
+        bar_pct = 95.0
+
+    # Format angka
+    def fmt(ms):
+        return f"{ms:.0f} ms" if ms >= 10 else f"{ms:.1f} ms"
+
+    return _c(f"""
+<div class="inf-wrap">
+<div class="inf-header">
+<span class="inf-eyebrow">▸ benchmark // waktu_inferensi</span>
+</div>
+<div class="inf-main">
+<div class="inf-total">
+<span class="inf-val" style="color:{color};">{fmt(inference_ms)}</span>
+<span class="inf-label" style="color:{color};">{label}</span>
+</div>
+<div class="inf-bar-wrap">
+<div class="inf-bar" style="width:{bar_pct:.1f}%;background:{bar_color};"></div>
+</div>
+<div class="inf-breakdown">
+<span class="inf-item">
+<span class="inf-item-key">Preprocess</span>
+<span class="inf-item-val">{fmt(preprocess_ms)}</span>
+</span>
+<span class="inf-sep">+</span>
+<span class="inf-item">
+<span class="inf-item-key">Predict</span>
+<span class="inf-item-val">{fmt(predict_ms)}</span>
+</span>
+<span class="inf-sep">=</span>
+<span class="inf-item">
+<span class="inf-item-key">Total</span>
+<span class="inf-item-val" style="color:{color};font-weight:700;">{fmt(inference_ms)}</span>
+</span>
+</div>
+</div>
+</div>
+<style>
+.inf-wrap {{
+background: rgba(5,17,26,0.85);
+border: 1px solid rgba(14,139,112,0.2);
+border-radius: 14px;
+padding: 1rem 1.2rem 0.9rem;
+margin: 0.75rem 0;
+}}
+.inf-header {{ margin-bottom: 0.7rem; }}
+.inf-eyebrow {{
+font-family: 'Space Mono', monospace !important;
+font-size: 0.62rem; letter-spacing: 0.1em;
+color: #0E8B70 !important;
+}}
+.inf-main {{ display: flex; flex-direction: column; gap: 0.55rem; }}
+.inf-total {{ display: flex; align-items: baseline; gap: 0.75rem; }}
+.inf-val {{
+font-family: 'Space Mono', monospace !important;
+font-size: 1.65rem; font-weight: 700; line-height: 1;
+}}
+.inf-label {{
+font-family: 'DM Sans', sans-serif !important;
+font-size: 0.8rem; font-weight: 600;
+}}
+.inf-bar-wrap {{
+width: 100%; height: 6px;
+background: rgba(255,255,255,0.06);
+border-radius: 999px; overflow: hidden;
+}}
+.inf-bar {{
+height: 100%; border-radius: 999px;
+transition: width 0.6s cubic-bezier(.4,0,.2,1);
+}}
+.inf-breakdown {{
+display: flex; align-items: center;
+gap: 0.5rem; flex-wrap: wrap;
+}}
+.inf-item {{ display: flex; align-items: center; gap: 0.35rem; }}
+.inf-item-key {{
+font-family: 'Space Mono', monospace !important;
+font-size: 0.6rem; letter-spacing: 0.08em;
+color: #7AB8A8 !important; text-transform: uppercase;
+}}
+.inf-item-val {{
+font-family: 'Space Mono', monospace !important;
+font-size: 0.76rem; font-weight: 700; color: #C7F2E8 !important;
+}}
+.inf-sep {{
+font-family: 'Space Mono', monospace !important;
+font-size: 0.7rem; color: #2D5E52 !important;
+}}
+</style>
+""")
     return _c("""
 <div style="text-align:center;padding:2.2rem 0 1rem;
 border-top:1px solid rgba(14,139,112,0.1);margin-top:2rem;">
