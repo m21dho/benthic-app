@@ -772,6 +772,79 @@ font-size: 0.7rem; color: #2D5E52 !important;
 
 
 # ============================================================
+# MULTI-OBJECT — ringkasan kelas yang terdeteksi
+# ============================================================
+def render_detected_summary(detected_classes: dict, total_ms: float, grid: tuple) -> str:
+    """
+    Tampilkan ringkasan kelas-kelas yang terdeteksi dari analisis patch.
+    detected_classes: {nama_kelas: confidence_max}
+    """
+    rows, cols = grid
+    n_patches  = rows * cols
+
+    if detected_classes:
+        tags = "".join(
+            f'<span class="det-tag" style="'
+            f'background:{CLASS_COLORS.get(cn,{}).get("accent","#888")}20;'
+            f'border:1px solid {CLASS_COLORS.get(cn,{}).get("accent","#888")};'
+            f'color:{CLASS_COLORS.get(cn,{}).get("accent","#888")};">'
+            f'{CLASS_ICONS.get(cn,"•")} {cn}'
+            f'</span>'
+            for cn in detected_classes
+        )
+        label = f"{len(detected_classes)} kelas terdeteksi"
+        label_color = "#18C99A"
+    else:
+        tags = '<span style="color:#7AB8A8;font-size:0.82rem;">Tidak ada kelas terdeteksi</span>'
+        label = "Tidak ada kelas terdeteksi"
+        label_color = "#4A6470"
+
+    return _c(f"""
+<div class="det-wrap">
+<div class="det-header">
+<span class="det-eyebrow">▸ multi-objek // patch_{rows}x{cols}</span>
+<span class="det-meta">{n_patches} patch · {total_ms:.0f} ms</span>
+</div>
+<div class="det-label" style="color:{label_color};">{label}</div>
+<div class="det-tags">{tags}</div>
+</div>
+<style>
+.det-wrap {{
+background: rgba(5,17,26,0.85);
+border: 1px solid rgba(14,139,112,0.22);
+border-radius: 14px;
+padding: 1rem 1.2rem;
+margin: 0.5rem 0;
+}}
+.det-header {{
+display: flex; justify-content: space-between;
+align-items: center; margin-bottom: 0.5rem;
+}}
+.det-eyebrow {{
+font-family: 'Space Mono', monospace !important;
+font-size: 0.62rem; letter-spacing: 0.1em; color: #0E8B70 !important;
+}}
+.det-meta {{
+font-family: 'Space Mono', monospace !important;
+font-size: 0.6rem; color: #2D5E52 !important;
+}}
+.det-label {{
+font-family: 'Space Grotesk', sans-serif !important;
+font-size: 1rem; font-weight: 600; margin-bottom: 0.6rem;
+}}
+.det-tags {{
+display: flex; flex-wrap: wrap; gap: 0.45rem;
+}}
+.det-tag {{
+font-family: 'DM Sans', sans-serif !important;
+font-size: 0.82rem; font-weight: 500;
+border-radius: 999px; padding: 0.25rem 0.75rem;
+}}
+</style>
+""")
+
+
+# ============================================================
 # FOOTER
 # ============================================================
 def render_footer() -> str:
