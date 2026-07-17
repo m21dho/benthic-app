@@ -235,6 +235,107 @@ button[kind="primary"]:disabled,
 
 /* ── Column gap ── */
 [data-testid="column"] { gap: 0 !important; }
+
+/* ════════════════════════════════════════════════════
+   MOBILE RESPONSIVE
+   Semua penyesuaian untuk layar ≤ 640px (smartphone)
+   ════════════════════════════════════════════════════ */
+@media screen and (max-width: 640px) {
+
+    /* ── Padding halaman lebih rapat ── */
+    .block-container {
+        padding: 0.8rem 0.6rem 3rem !important;
+        max-width: 100% !important;
+    }
+
+    /* ── Semua kolom Streamlit stack vertikal ── */
+    [data-testid="stHorizontalBlock"] {
+        flex-direction: column !important;
+        gap: 0.5rem !important;
+    }
+    [data-testid="column"] {
+        width: 100% !important;
+        min-width: 100% !important;
+        flex: 1 1 100% !important;
+    }
+
+    /* ── Header lebih compact ── */
+    .bk-header { padding: 1.4rem 0 1.2rem !important; }
+    .bk-title { font-size: 2rem !important; }
+    .bk-sub {
+        font-size: 0.85rem !important;
+        max-width: 100% !important;
+        line-height: 1.5 !important;
+    }
+    .bk-tags { gap: 0.3rem !important; }
+    .bk-tag { font-size: 0.72rem !important; padding: 0.18rem 0.5rem !important; }
+    .bk-eyebrow { font-size: 0.62rem !important; }
+
+    /* ── Placeholder gambar lebih pendek ── */
+    .bk-img-ph { min-height: 160px !important; }
+
+    /* ── Output card lebih compact ── */
+    .bk-out { padding: 0.85rem 0.95rem 0.7rem !important; }
+    .bk-out-name { font-size: 1.25rem !important; }
+    .bk-out-ico { font-size: 1.4rem !important; }
+    .bk-out-ey { font-size: 0.56rem !important; }
+
+    /* ── Tombol: tinggi lebih besar (touch-friendly) ── */
+    button[kind="primary"],
+    [data-testid="stBaseButton-primary"],
+    .stButton > button {
+        min-height: 48px !important;
+        font-size: 0.95rem !important;
+    }
+
+    /* ── File uploader: lebih tinggi untuk touch ── */
+    [data-testid="stFileUploaderDropzone"] {
+        height: 48px !important;
+    }
+    [data-testid="stFileUploaderDropzone"]::after {
+        font-size: 0.95rem !important;
+    }
+    [data-testid="stFileUploaderDropzone"] button {
+        height: 48px !important;
+    }
+
+    /* ── Sonar bars: label lebih sempit ── */
+    .sn-row {
+        grid-template-columns: 72px 1fr !important;
+        gap: 0.5rem !important;
+        padding: 0.35rem 0 !important;
+    }
+    .sn-lbl { font-size: 0.76rem !important; }
+    .sn-hint { font-size: 0.74rem !important; }
+    .sn-track { height: 7px !important; }
+    .sn-ping { width: 8px !important; height: 8px !important; }
+
+    /* ── Selectbox Grad-CAM ── */
+    [data-testid="stSelectbox"] > div > div {
+        font-size: 0.88rem !important;
+    }
+
+    /* ── Caption ── */
+    [data-testid="stCaptionContainer"] p {
+        font-size: 0.75rem !important;
+    }
+
+    /* ── Expander ── */
+    .streamlit-expanderHeader {
+        font-size: 0.76rem !important;
+        padding: 0.65rem 0.9rem !important;
+    }
+
+    /* ── Image rounded corners lebih kecil ── */
+    [data-testid="stImage"] img {
+        border-radius: 10px !important;
+    }
+
+    /* ── Status container ── */
+    [data-testid="stStatus"] {
+        font-size: 0.85rem !important;
+    }
+}
 </style>
 """
 
@@ -255,7 +356,7 @@ def render_header() -> str:
     return _c(f"""
 <div class="bk-header">
 <div class="bk-header-glow"></div>
-<div class="bk-eyebrow">Sistem Klasifikasi</div>
+<div class="bk-eyebrow">Sistem Identifikasi</div>
 <h1 class="bk-title">Habitat Bentik</h1>
 <p class="bk-sub">Identifikasi tutupan dasar laut dari foto bawah air
 menggunakan model MobileNetV2 yang telah dilatih khusus.</p>
