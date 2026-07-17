@@ -179,7 +179,114 @@ def overlay_gradcam(pil_image, heatmap, alpha=0.45, img_size=IMG_SIZE):
     return PILImage.fromarray(overlay)
 
 
-def compute_gradcam_overlay(model, pil_image, pred_index=None, alpha=0.45):
+def classify_patches(model, pil_image, grid=(2, 2), threshold=0.55):
+    """
+    Patch-based multi-region classification.
+    Potong gambar menjadi grid patch, klasifikasikan tiap patch dengan model
+    yang sama (tanpa perubahan arsitektur/training).
+
+    Return dict:
+      patches         — list hasil per patch
+      detected_classes— {nama_kelas: confidence_tertinggi} kelas yang lolos threshold
+      total_ms        — total waktu (ms)
+      grid            — (rows, cols)
+    """
+    import time
+    from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
+
+    W, H   = pil_image.size
+    rows, cols = grid
+    pw, ph = W // cols, H // rows   # ukuran tiap patch
+
+    patches = []
+    t0 = time.perf_counter()
+
+    for r in range(rows):
+        for c in range(cols):
+            left, top = c * pw, r * ph
+            right, bottom = left + pw, top + ph
+
+            patch     = pil_image.crop((left, top, right, bottom))
+            patch_rgb = patch.convert("RGB").resize((IMG_SIZE, IMG_SIZE))
+            arr       = preprocess_input(np.array(patch_rgb, dtype=np.float32))
+            preds     = model.predict(np.expand_dims(arr, 0), verbose=0)
+
+            conf    = float(np.max(preds))
+            cls_idx = int(np.argmax(preds))
+            cls     = CLASS_NAMES[cls_idx]
+
+            patches.append({
+                "row": r, "col": c,
+                "box": (left, top, right, bottom),
+                "patch_img": patch,
+                "pred_class": cls,
+                "confidence": conf,
+                "detected": conf >= threshold,
+            })
+
+    total_ms = (time.perf_counter() - t0) * 1000
+
+    # Kelas unik yang terdeteksi — ambil confidence tertinggi per kelas
+    detected = {}
+    for p in patches:
+        if p["detected"]:
+            cls = p["pred_class"]
+            if cls not in detected or p["confidence"] > detected[cls]:
+                detected[cls] = p["confidence"]
+
+    return {
+        "patches": patches,
+        "detected_classes": detected,
+        "total_ms": total_ms,
+        "grid": grid,
+    }
+
+
+def draw_patch_grid(pil_image, patch_results, grid):
+    """
+    Gambar overlay grid + label kelas di atas gambar asli menggunakan PIL.
+    Return PIL.Image dengan anotasi.
+    """
+    from PIL import ImageDraw
+
+    # Palet warna per kelas (R, G, B)
+    PALETTE = {
+        "Alga":    (46,  139,  87),
+        "Karang":  (216,  90,  48),
+        "Lainnya": (107, 107, 102),
+        "Lamun":   (22,  127, 107),
+        "Pasir":   (185, 128,  46),
+    }
+
+    img  = pil_image.convert("RGB").copy()
+    W, H = img.size
+    draw = ImageDraw.Draw(img, "RGBA")
+
+    for p in patch_results:
+        l, t, r, b = p["box"]
+        cls    = p["pred_class"]
+        conf   = p["confidence"]
+        hit    = p["detected"]
+        color  = PALETTE.get(cls, (128, 128, 128))
+        alpha  = 130 if hit else 40
+        border = 3   if hit else 1
+
+        # Semi-transparent fill
+        draw.rectangle([l, t, r, b],
+                       fill=(*color, alpha // 3),
+                       outline=(*color, alpha),
+                       width=border)
+
+        if hit:
+            label    = f"{cls}  {conf*100:.0f}%"
+            lbl_h    = max(22, H // 22)
+            lbl_w    = min(r - l, max(90, len(label) * 7))
+            # Label background
+            draw.rectangle([l, t, l + lbl_w, t + lbl_h],
+                           fill=(*color, 210))
+            draw.text((l + 5, t + 4), label, fill=(255, 255, 255, 255))
+
+    return img
     """
     Fungsi siap-pakai: hitung Grad-CAM utk pil_image & kembalikan PIL.Image
     hasil overlay, atau None jika gagal (mis. tidak ada conv layer ditemukan).
