@@ -251,12 +251,18 @@ button[kind="primary"]:disabled,
     /* ── Semua kolom Streamlit stack vertikal ── */
     [data-testid="stHorizontalBlock"] {
         flex-direction: column !important;
-        gap: 0.5rem !important;
+        gap: 1.2rem !important;
     }
     [data-testid="column"] {
         width: 100% !important;
         min-width: 100% !important;
         flex: 1 1 100% !important;
+        margin-bottom: 0 !important;
+    }
+
+    /* Tambah jarak bawah blok gambar sebelum output kelas */
+    [data-testid="column"]:first-child {
+        margin-bottom: 0.5rem !important;
     }
 
     /* ── Header lebih compact ── */
@@ -271,8 +277,8 @@ button[kind="primary"]:disabled,
     .bk-tag { font-size: 0.72rem !important; padding: 0.18rem 0.5rem !important; }
     .bk-eyebrow { font-size: 0.62rem !important; }
 
-    /* ── Placeholder gambar lebih pendek ── */
-    .bk-img-ph { min-height: 160px !important; }
+    /* ── Placeholder gambar lebih pendek tapi ada jarak bawah ── */
+    .bk-img-ph { min-height: 160px !important; padding-bottom: 0.5rem !important; }
 
     /* ── Output card lebih compact ── */
     .bk-out { padding: 0.85rem 0.95rem 0.7rem !important; }
