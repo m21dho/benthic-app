@@ -769,6 +769,12 @@ font-size: 0.7rem; color: #2D5E52 !important;
 }}
 </style>
 """)
+
+
+# ============================================================
+# FOOTER
+# ============================================================
+def render_footer() -> str:
     return _c("""
 <div style="text-align:center;padding:2.2rem 0 1rem;
 border-top:1px solid rgba(14,139,112,0.1);margin-top:2rem;">
