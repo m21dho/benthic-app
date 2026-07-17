@@ -261,8 +261,6 @@ with btn_col2:
         width="stretch",
         disabled=not has_image,
     )
-
-# Tampilkan nama file di bawah tombol (dari session_state, bukan dari widget Streamlit)
 if st.session_state.classify_fingerprint is not None:
     fname, fsize_bytes = st.session_state.classify_fingerprint
     fsize_str = f"{fsize_bytes/1024:.1f} KB"
