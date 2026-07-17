@@ -287,6 +287,9 @@ def draw_patch_grid(pil_image, patch_results, grid):
             draw.text((l + 5, t + 4), label, fill=(255, 255, 255, 255))
 
     return img
+
+
+def compute_gradcam_overlay(model, pil_image, pred_index=None, alpha=0.45):
     """
     Fungsi siap-pakai: hitung Grad-CAM utk pil_image & kembalikan PIL.Image
     hasil overlay, atau None jika gagal (mis. tidak ada conv layer ditemukan).
