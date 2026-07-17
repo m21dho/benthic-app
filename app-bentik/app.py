@@ -19,7 +19,7 @@ from config import (
     MODEL_FOLDER, MODEL_FILENAME, get_hf_config,
 )
 from hf_hub_utils import hf_download_model  # noqa: F401 (kept for potential future use)
-from model_utils import classify_image, compute_gradcam_overlay
+from model_utils import classify_image, compute_gradcam_overlay, classify_patches, draw_patch_grid
 from styles import (
     CSS,
     render_header,
@@ -30,6 +30,7 @@ from styles import (
     render_img_label,
     render_sonar_no_numbers,
     render_inference_time,
+    render_detected_summary,
     render_footer,
 )
 
@@ -328,6 +329,95 @@ if has_result:
     probs = st.session_state.classify_result["probs"]
     with st.expander("▸  detail"):
         st.markdown(render_sonar_no_numbers(probs), unsafe_allow_html=True)
+
+
+# ============================================================
+# MULTI-OBJECT DETECTION — patch-based
+# Hanya tampil jika sudah ada gambar & hasil klasifikasi
+# ============================================================
+if has_image and has_result:
+    st.markdown("---")
+    st.markdown(
+        '<p style="font-family:\'Space Mono\',monospace!important;font-size:0.7rem;'
+        'letter-spacing:0.12em;text-transform:uppercase;color:#0E8B70!important;'
+        'margin:0 0 0.7rem;">▸ multi-objek // patch_analysis</p>',
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "Model yang sama dijalankan pada setiap area foto secara terpisah "
+        "untuk mendeteksi beberapa jenis habitat dalam satu gambar."
+    )
+
+    grid_choice = st.radio(
+        "Jumlah patch:",
+        ["2×2  (4 area)", "3×3  (9 area)"],
+        horizontal=True,
+        label_visibility="visible",
+    )
+    grid = (2, 2) if grid_choice.startswith("2") else (3, 3)
+
+    if st.button("🔍 Jalankan Deteksi Multi-Objek", type="primary", width="stretch"):
+        with st.spinner("Menganalisis setiap area gambar..."):
+            patch_result = classify_patches(
+                st.session_state.loaded_model,
+                st.session_state.pil_image,
+                grid=grid,
+                threshold=CONFIDENCE_THRESHOLD,
+            )
+            annotated = draw_patch_grid(
+                st.session_state.pil_image,
+                patch_result["patches"],
+                grid,
+            )
+        st.session_state["patch_result"]  = patch_result
+        st.session_state["patch_annotated"] = annotated
+        st.session_state["patch_grid"] = grid
+
+    if "patch_result" in st.session_state:
+        pr  = st.session_state["patch_result"]
+        ann = st.session_state["patch_annotated"]
+        pg  = st.session_state.get("patch_grid", (2, 2))
+
+        # Gambar anotasi
+        ma1, ma2 = st.columns([1, 1])
+        with ma1:
+            st.markdown(render_img_label("original"), unsafe_allow_html=True)
+            st.image(st.session_state.pil_image, width="stretch")
+        with ma2:
+            st.markdown(render_img_label(f"patch {pg[0]}×{pg[1]}"), unsafe_allow_html=True)
+            st.image(ann, width="stretch")
+
+        # Ringkasan kelas yang terdeteksi
+        st.markdown(
+            render_detected_summary(
+                pr["detected_classes"],
+                pr["total_ms"],
+                pr["grid"],
+            ),
+            unsafe_allow_html=True,
+        )
+
+        # Detail tiap patch
+        with st.expander("▸  detail tiap patch"):
+            rows, cols = pr["grid"]
+            for r in range(rows):
+                patch_cols = st.columns(cols)
+                for c in range(cols):
+                    idx = r * cols + c
+                    p   = pr["patches"][idx]
+                    with patch_cols[c]:
+                        st.image(p["patch_img"], width="stretch")
+                        cls   = p["pred_class"]
+                        conf  = p["confidence"]
+                        hit   = p["detected"]
+                        color = "#18C99A" if hit else "#4A6470"
+                        st.markdown(
+                            f'<p style="font-family:\'Space Mono\',monospace!important;'
+                            f'font-size:0.62rem;color:{color}!important;'
+                            f'margin:0.2rem 0 0;text-align:center;">'
+                            f'{"✓" if hit else "○"} {cls}<br>{conf*100:.0f}%</p>',
+                            unsafe_allow_html=True,
+                        )
 
 
 # ============================================================
