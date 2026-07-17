@@ -49,21 +49,33 @@ def classify_image(model, pil_image):
     Fungsi inti klasifikasi — murni logika, tanpa elemen Streamlit.
     Input : model Keras + gambar PIL
     Output: dict {
-        "pred_class": str,
-        "confidence": float (0..1),
-        "probs": {nama_kelas: persentase_float, ...}
+        "pred_class"    : str,
+        "confidence"    : float (0..1),
+        "probs"         : {nama_kelas: persentase_float, ...},
+        "inference_ms"  : float  — total waktu preprocessing + predict (ms),
+        "predict_ms"    : float  — murni waktu model.predict() saja (ms),
+        "preprocess_ms" : float  — waktu resize + preprocess_input (ms),
     }
     """
+    import time
     from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
 
-    img_rgb = pil_image.convert("RGB").resize((IMG_SIZE, IMG_SIZE))
+    # ── Preprocessing ──────────────────────────────────────────
+    t_pre_start = time.perf_counter()
+    img_rgb   = pil_image.convert("RGB").resize((IMG_SIZE, IMG_SIZE))
     img_array = preprocess_input(np.array(img_rgb, dtype=np.float32))
     img_input = np.expand_dims(img_array, axis=0)
+    preprocess_ms = (time.perf_counter() - t_pre_start) * 1000
 
-    predictions = model.predict(img_input, verbose=0)
+    # ── Inferensi (model.predict) ───────────────────────────────
+    t_pred_start = time.perf_counter()
+    predictions  = model.predict(img_input, verbose=0)
+    predict_ms   = (time.perf_counter() - t_pred_start) * 1000
+
+    # ── Postprocessing ──────────────────────────────────────────
     pred_confidence = float(np.max(predictions))
-    pred_class_idx = int(np.argmax(predictions))
-    pred_class = CLASS_NAMES[pred_class_idx]
+    pred_class_idx  = int(np.argmax(predictions))
+    pred_class      = CLASS_NAMES[pred_class_idx]
 
     probs = {
         CLASS_NAMES[i]: float(predictions[0][i]) * 100
@@ -71,9 +83,12 @@ def classify_image(model, pil_image):
     }
 
     return {
-        "pred_class": pred_class,
-        "confidence": pred_confidence,
-        "probs": probs,
+        "pred_class"    : pred_class,
+        "confidence"    : pred_confidence,
+        "probs"         : probs,
+        "inference_ms"  : preprocess_ms + predict_ms,
+        "predict_ms"    : predict_ms,
+        "preprocess_ms" : preprocess_ms,
     }
 
 
