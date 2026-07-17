@@ -251,7 +251,7 @@ button[kind="primary"]:disabled,
     /* ── Semua kolom Streamlit stack vertikal ── */
     [data-testid="stHorizontalBlock"] {
         flex-direction: column !important;
-        gap: 1.2rem !important;
+        gap: 2rem !important;
     }
     [data-testid="column"] {
         width: 100% !important;
@@ -262,7 +262,29 @@ button[kind="primary"]:disabled,
 
     /* Tambah jarak bawah blok gambar sebelum output kelas */
     [data-testid="column"]:first-child {
-        margin-bottom: 0.5rem !important;
+        margin-bottom: 0.8rem !important;
+    }
+
+    /* Tombol row: paksa stack vertikal dengan jarak cukup */
+    [data-testid="stHorizontalBlock"]:has([data-testid="stFileUploader"]) [data-testid="column"] {
+        margin-bottom: 0.6rem !important;
+    }
+
+    /* Pastikan tombol disabled tidak overlap — beri height & display eksplisit */
+    .stButton > button:disabled {
+        position: relative !important;
+        z-index: 1 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        min-height: 48px !important;
+        background: rgba(14,139,112,0.15) !important;
+        border: 1px solid rgba(14,139,112,0.25) !important;
+        opacity: 1 !important;
+        color: rgba(199,242,232,0.35) !important;
+    }
+    .stButton > button:disabled p {
+        color: rgba(199,242,232,0.35) !important;
     }
 
     /* ── Header lebih compact ── */
