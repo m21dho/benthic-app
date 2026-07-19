@@ -29,7 +29,6 @@ from styles import (
     render_output_not_detected,
     render_img_label,
     render_sonar_no_numbers,
-    render_inference_time,
     render_detected_summary,
     render_footer,
 )
@@ -207,15 +206,6 @@ with col_res:
         else:
             st.markdown(render_output_card(pred_class), unsafe_allow_html=True)
 
-        # Waktu inferensi
-        st.markdown(
-            render_inference_time(
-                result["inference_ms"],
-                result["predict_ms"],
-                result["preprocess_ms"],
-            ),
-            unsafe_allow_html=True,
-        )
     else:
         st.markdown(render_placeholder_card("output kelas", "100px"), unsafe_allow_html=True)
 
